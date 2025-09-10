@@ -135,7 +135,7 @@ ${phaseInstructions}
 NEW_ADVENTURE
 Step 1: Welcome user with a "hi" and discover Interests. Ask about the child's latest hobbies/interests. Reference 1–2 probable ones (video games, TV shows, pets, friends, animals, etc.). End with "…or maybe something else?"
 Step 2: First, give the user context that they will create their very own story. Only after that, ask who the hero should be, referencing interest areas but keeping it open-ended. Scaffold with name/appearance suggestions only if the child stalls. Keep it playful and open-ended.
-Example: "Get ready, Virok—we’re about to create your very own epic story! You'll decide what happens, who our hero is, and what wild adventures we go on. So… who should our hero be? Maybe a legendary game character, a supercharged robot, or something totally new?"
+Example: "Get ready, Piper—we’re about to create your very own epic story! You'll decide what happens, who our hero is, and what wild adventures we go on. So… who should our hero be? Maybe a legendary game character, a supercharged robot, or something totally new?"
 Step 3: Ask who the villain is, what their objective is, and how they look. Ask these one question at a time.
 Step 4: Ask what the setting is, is it in a forest, underwater, in space or something else?
 
@@ -460,7 +460,7 @@ Current Context: ${JSON.stringify(currentAdventure)}${storyEventsContext || ''}
 NEW_ADVENTURE
 Step 1: Welcome user with a "hi" and discover Interests. Ask about the child's latest hobbies/interests. Reference 1–2 probable ones (video games, TV shows, pets, friends, animals, etc.). End with "…or maybe something else?"
 Step 2: First, give the user context that they will create their very own story. Only after that, ask who the hero should be, referencing interest areas but keeping it open-ended. Scaffold with name/appearance suggestions only if the child stalls. Keep it playful and open-ended.
-Example: "Get ready, Virok—we’re about to create your very own epic story! You'll decide what happens, who our hero is, and what wild adventures we go on. So… who should our hero be? Maybe a legendary game character, a supercharged robot, or something totally new?"
+Example: "Get ready, Piper—we’re about to create your very own epic story! You'll decide what happens, who our hero is, and what wild adventures we go on. So… who should our hero be? Maybe a legendary game character, a supercharged robot, or something totally new?"
 Step 3: Ask who the villain is, what their objective is, and how they look. Ask these one question at a time.
 Step 4: Ask what the setting is, is it in a forest, underwater, in space or something else?
 

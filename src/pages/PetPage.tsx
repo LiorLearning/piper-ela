@@ -68,7 +68,7 @@ export function PetPage({}: Props): JSX.Element {
   };
   
   // State for which pet is currently being displayed
-  const [currentPet, setCurrentPet] = useState('dog'); // Default to dog
+  const [currentPet, setCurrentPet] = useState('cat'); // Default to cat
   
   // Local state for UI interactions
   const [showHeartAnimation, setShowHeartAnimation] = useState(false);
@@ -78,7 +78,7 @@ export function PetPage({}: Props): JSX.Element {
   const [lastSpokenMessage, setLastSpokenMessage] = useState('');
   
   // Pet store state
-  const [selectedStorePet, setSelectedStorePet] = useState('dog'); // Which pet's store section is shown
+  const [selectedStorePet, setSelectedStorePet] = useState('cat'); // Which pet's store section is shown
   const [storeRefreshTrigger, setStoreRefreshTrigger] = useState(0); // Trigger to refresh store data
   
   // Sleep state management with localStorage persistence
@@ -442,49 +442,62 @@ export function PetPage({}: Props): JSX.Element {
   // Get Bobo images based on coins spent
   const getBoboImage = (coinsSpent: number) => {
     if (coinsSpent >= 50) {
-      return "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250906_011137_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+      return "TBD - Bobo (50+ coins)";
     } else if (coinsSpent >= 30) {
-      return "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250906_011115_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+      return "TBD - Bobo (30+ coins)";
     } else if (coinsSpent >= 10) {
-      return "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250906_011058_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+      return "TBD - Bobo (10+ coins)";
     } else {
-      return "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250906_011043_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+      return "TBD - Bobo (0+ coins)";
     }
   };
 
   // Get Feather images based on coins spent
   const getFeatherImage = (coinsSpent: number) => {
     if (coinsSpent >= 50) {
-      return "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250908_154758_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+      return "TBD - Feather (50+ coins)";
     } else if (coinsSpent >= 30) {
-      return "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250908_154733_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+      return "TBD - Feather (30+ coins)";
     } else if (coinsSpent >= 10) {
-      return "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250908_155301_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+      return "TBD - Feather (10+ coins)";
     } else {
-      return "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250908_154712_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+      return "TBD - Feather (0+ coins)";
+    }
+  };
+
+  // Get Jennie images based on coins spent
+  const getJennieImage = (coinsSpent: number) => {
+    if (coinsSpent >= 50) {
+      return "TBD - Jennie (50+ coins)";
+    } else if (coinsSpent >= 30) {
+      return "TBD - Jennie (30+ coins)";
+    } else if (coinsSpent >= 10) {
+      return "TBD - Jennie (10+ coins)";
+    } else {
+      return "TBD - Jennie (0+ coins)";
     }
   };
 
   // Get sleepy pet images based on sleep clicks
   const getSleepyPetImage = (clicks: number) => {
     if (clicks >= 5) {
-      // TBD - will be added later (fully asleep)
-      return "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250909_165610_dog_den_no_bg.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+      // Fully asleep cat - using most evolved cat image
+      return "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250909_234447_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
     } else if (clicks >= 3) {
-      // TBD - will be added later (deep sleep)
-      return "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250909_163624_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+      // Deep sleep cat - using 30+ coin cat image
+      return "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250909_234441_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
     } else if (clicks >= 1) {
-      // 1+ clicks (getting sleepy)
-      return "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250909_162600_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+      // Getting sleepy cat - using 10+ coin cat image
+      return "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250909_234455_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
     } else {
-      // 0 clicks (starting to sleep)
-      return "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250909_162533_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+      // Starting to sleep cat - using base cat image
+      return "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250909_234430_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
     }
   };
 
   const getPetImage = () => {
     // If pet is in sleep mode (sleepClicks > 0), show sleepy images
-    if (sleepClicks > 0 && currentPet === 'dog') {
+    if (sleepClicks > 0 && currentPet === 'cat') {
       return getSleepyPetImage(sleepClicks);
     }
     
@@ -502,44 +515,51 @@ export function PetPage({}: Props): JSX.Element {
       return getFeatherImage(featherCoinsSpent);
     }
     
+    // Check if Jennie is owned and being displayed
+    if (currentPet === 'jennie' && isPetOwned('jennie')) {
+      // For Jennie, use pet-specific coin tracking
+      const jennieCoinsSpent = getPetCoinsSpent('jennie');
+      return getJennieImage(jennieCoinsSpent);
+    }
+    
     // Calculate coins spent on feeding for current evolution stage (for dog)
     const coinsSpentOnFeeding = getCoinsSpentForCurrentStage(currentStreak);
     
-    // Check streak level for different dog evolution tiers
+    // Check streak level for different cat evolution tiers
     let currentImage;
     
     if (currentStreak >= 3) {
-      // Fully evolved dog versions for users with 3+ day streak
+      // Fully evolved cat versions for users with 3+ day streak
       if (coinsSpentOnFeeding >= 50) {
-        currentImage = "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250906_001902_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+        currentImage = "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250909_234447_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
       } else if (coinsSpentOnFeeding >= 30) {
-        currentImage = "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250906_001847_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+        currentImage = "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250909_234441_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
       } else if (coinsSpentOnFeeding >= 10) {
-        currentImage = "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250906_001814_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+        currentImage = "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250909_234455_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
       } else {
-        currentImage = "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250906_001757_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+        currentImage = "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250909_234430_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
       }
     } else if (currentStreak >= 2) {
-      // Grown dog versions for users with 2+ day streak
+      // Grown cat versions for users with 2+ day streak
       if (coinsSpentOnFeeding >= 50) {
-        currentImage = "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250906_001500_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+        currentImage = "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250909_234447_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
       } else if (coinsSpentOnFeeding >= 30) {
-        currentImage = "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250906_001443_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+        currentImage = "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250909_234441_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
       } else if (coinsSpentOnFeeding >= 10) {
-        currentImage = "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250906_001432_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+        currentImage = "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250909_234455_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
       } else {
-        currentImage = "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250906_001417_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+        currentImage = "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250909_234430_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
       }
     } else {
-      // Original small pup images for users with <2 day streak
+      // Original small kitten images for users with <2 day streak
       if (coinsSpentOnFeeding >= 50) {
-        currentImage = "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250905_160214_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+        currentImage = "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250910_000550_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
       } else if (coinsSpentOnFeeding >= 30) {
-        currentImage = "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250906_000902_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+        currentImage = "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250909_234447_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
       } else if (coinsSpentOnFeeding >= 10) {
-        currentImage = "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250905_160535_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+        currentImage = "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250909_234441_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
       } else {
-        currentImage = "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250905_160158_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+        currentImage = "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250909_234430_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
       }
     }
     
@@ -595,62 +615,51 @@ export function PetPage({}: Props): JSX.Element {
     // Ensure we use the latest pet ownership data
     
     return {
-    dog: {
-      id: 'dog',
-      emoji: '🐶',
-      name: 'April',
-      owned: true, // Dog is always owned by default
+    cat: {
+      id: 'cat',
+      emoji: '🐱',
+      name: 'Azrael',
+      owned: true, // Cat is always owned by default
       cost: 0,
       den: {
-        id: 'cozy_doghouse',
-        name: 'Cozy Doghouse Den',
+        id: 'cozy_cathouse',
+        name: 'Cozy Cat House Den',
         emoji: '🏠',
         cost: 50,
-        description: 'A warm, comfortable space for April to rest and play'
+        description: 'A warm, comfortable space for Azrael to rest and play - will arrive in 24 hours!'
       },
-      accessories: [
-        { id: 'chew_toys', name: 'Chew Toys', emoji: '🦴', cost: 10, description: 'Durable toys to keep April entertained', locked: true },
-        { id: 'tennis_ball', name: 'Tennis Ball', emoji: '🥎', cost: 15, description: 'A bouncy ball for fetch games', locked: true },
-        { id: 'luxury_bed', name: 'Luxury Dog Bed', emoji: '🛏️', cost: 30, description: 'Premium comfort for the best sleep', locked: true }
-      ]
+      accessories: []
     },
-    bobo: {
-      id: 'bobo',
-      emoji: '🐵',
-      name: 'Bobo',
-      owned: isPetOwned('bobo'),
-      cost: 60,
+    jennie: {
+      id: 'jennie',
+      emoji: '👩‍🎤',
+      name: 'Jennie',
+      owned: isPetOwned('jennie'),
+      cost: 50,
       den: {
-        id: 'jungle_treehouse',
-        name: 'Jungle Treehouse Den',
-        emoji: '🌳',
+        id: 'music_studio',
+        name: 'Music Studio Den',
+        emoji: '🎵',
         cost: 50,
-        description: 'A treetop paradise with swinging vines and banana storage'
+        description: 'A stylish studio for creating amazing music - will arrive in 24 hours!'
       },
-      accessories: [
-        { id: 'banana_stash', name: 'Banana Stash', emoji: '🍌', cost: 20, description: 'Fresh bananas always within reach' },
-        { id: 'vine_swings', name: 'Vine Swings', emoji: '🌿', cost: 25, description: 'Natural swings for acrobatic fun' },
-        { id: 'coconut_toys', name: 'Coconut Toys', emoji: '🥥', cost: 15, description: 'Interactive coconut puzzle toys' }
-      ]
+      accessories: []
     },
-    feather: {
-      id: 'feather',
-      emoji: '🦜',
-      name: 'Feather',
-      owned: isPetOwned('feather'),
-      cost: 60,
+    more_coming: {
+      id: 'more_coming',
+      emoji: '✨',
+      name: 'More Coming Soon!',
+      owned: false,
+      cost: 0,
+      isPlaceholder: true,
       den: {
-        id: 'sky_nest',
-        name: 'Sky Nest Den',
-        emoji: '☁️',
-        cost: 50,
-        description: 'A floating nest among the clouds with endless sky views'
+        id: 'placeholder_den',
+        name: 'More Dens Coming Soon!',
+        emoji: '🔮',
+        cost: 0,
+        description: 'Exciting new dens will be added in future updates!'
       },
-      accessories: [
-        { id: 'seed_dispenser', name: 'Seed Dispenser', emoji: '🌱', cost: 20, description: 'Automatic feeder with premium seeds' },
-        { id: 'perch_collection', name: 'Perch Collection', emoji: '🪶', cost: 25, description: 'Various perches for different moods' },
-        { id: 'mirror_toy', name: 'Mirror Toy', emoji: '🪞', cost: 15, description: 'Interactive mirror for social play' }
-      ]
+      accessories: []
     }
     };
   };
@@ -723,11 +732,11 @@ export function PetPage({}: Props): JSX.Element {
       if (boboCoinsSpent === 0) {
         const hungryThoughts = [
           "Oook ook! 🐵 I'm Bobo! My banana belly is empty... can you feed me some cookies?",
-          "Hey there, Callee! 🍌 Bobo here! I'm swinging from hunger... got any treats?",
+          "Hey there, Piper! 🍌 Bobo here! I'm swinging from hunger... got any treats?",
           "Oook! It's me, your monkey friend Bobo! 🐵 My tummy is rumbling for some cookies!",
-          "Hi Callee! Bobo needs some yummy cookies! 🍪 My monkey appetite is huge!",
+          "Hi Piper! Bobo needs some yummy cookies! 🍪 My monkey appetite is huge!",
           "Oook ook! 🐵 Bobo is starving! Can you help your monkey friend with some treats?",
-          "Callee! 🍌 Your monkey Bobo is so hungry... cookies would make me do happy flips!"
+          "Piper! 🍌 Your monkey Bobo is so hungry... cookies would make me do happy flips!"
         ];
         return getRandomThought(hungryThoughts);
       } else if (boboCoinsSpent < 30) {
@@ -736,7 +745,7 @@ export function PetPage({}: Props): JSX.Element {
           "Oook ook! Those cookies were amazing! 🐵 But Bobo could eat more!",
           "Yum yum! 🍪 These treats are perfect for a growing monkey like me!",
           "Oook! Those cookies hit the spot! 🐵 But my monkey appetite is still growing!",
-          "Thank you, Callee! 🥰 Those cookies were perfect, but Bobo is still a little peckish!",
+          "Thank you, Piper! 🥰 Those cookies were perfect, but Bobo is still a little peckish!",
           "Delicious! 🍪 My tail is wagging so fast! More cookies would make me flip with happiness!"
         ];
         return getRandomThought(satisfiedThoughts);
@@ -745,17 +754,17 @@ export function PetPage({}: Props): JSX.Element {
           "Oook ook! I'm growing stronger! 🐵 Keep feeding me - I'm getting bigger and more agile!",
           "Look at me swing! 💪 I can feel myself getting stronger with each cookie!",
           "Amazing! I'm growing so fast! 🌱 More cookies will help me become the ultimate monkey!",
-          "Callee, I feel so energetic! ⚡ These cookies are making me bigger and more acrobatic!",
+          "Piper, I feel so energetic! ⚡ These cookies are making me bigger and more acrobatic!",
           "Oook ook! I'm transforming! 🦋 Keep the cookies coming - I'm almost ready for the next stage!",
           "Incredible! My monkey body is changing! 🐵 More cookies will help me reach my full potential!"
         ];
         return getRandomThought(growingThoughts);
       } else {
         const happyThoughts = [
-          "Oook ook! 🥳 I feel amazing, Callee! Now... could you get me some monkey friends to play with!",
+          "Oook ook! 🥳 I feel amazing, Piper! Now... could you get me some monkey friends to play with!",
           "Oook ook! I'm so strong now! 💪 Maybe it's time to find some playmates to swing with?",
           "I feel fantastic! 🌟 All those cookies worked! Now I'm ready for some monkey business with friends!",
-          "Amazing! I'm at my best! ✨ Callee, can you help me find some buddies to climb trees with?",
+          "Amazing! I'm at my best! ✨ Piper, can you help me find some buddies to climb trees with?",
           "Hooray! I'm fully grown! 🎉 Can you help me find some monkey friends to play with?",
           "Perfect! I feel incredible! 🚀 Maybe it's time to find some playmates for jungle adventures?"
         ];
@@ -772,9 +781,9 @@ export function PetPage({}: Props): JSX.Element {
           "Chirp chirp! 🦜 I'm Feather! My little bird belly is empty... can you feed me some seeds?",
           "Tweet tweet! 🌟 Feather here! I'm fluttering from hunger... got any treats?",
           "Chirp! It's me, your feathered friend Feather! 🦜 My tummy is chirping for some seeds!",
-          "Hi Callee! Feather needs some yummy seeds! 🌱 My bird appetite is huge!",
+          "Hi Piper! Feather needs some yummy seeds! 🌱 My bird appetite is huge!",
           "Tweet tweet! 🦜 Feather is starving! Can you help your bird friend with some treats?",
-          "Callee! 🌟 Your bird Feather is so hungry... seeds would make me sing beautiful songs!"
+          "Piper! 🌟 Your bird Feather is so hungry... seeds would make me sing beautiful songs!"
         ];
         return getRandomThought(hungryThoughts);
       } else if (featherCoinsSpent < 30) {
@@ -783,7 +792,7 @@ export function PetPage({}: Props): JSX.Element {
           "Chirp chirp! Those seeds were amazing! 🦜 But Feather could eat more!",
           "Yum yum! 🌾 These treats are perfect for a growing bird like me!",
           "Tweet! Those seeds hit the spot! 🦜 But my bird appetite is still growing!",
-          "Thank you, Callee! 🥰 Those seeds were perfect, but Feather is still a little peckish!",
+          "Thank you, Piper! 🥰 Those seeds were perfect, but Feather is still a little peckish!",
           "Delicious! 🌱 My wings are flapping so fast! More seeds would make me soar with happiness!"
         ];
         return getRandomThought(satisfiedThoughts);
@@ -792,70 +801,117 @@ export function PetPage({}: Props): JSX.Element {
           "Tweet tweet! I'm growing stronger! 🦜 Keep feeding me - I'm getting bigger and more colorful!",
           "Look at me fly! 💪 I can feel myself getting stronger with each seed!",
           "Amazing! I'm growing so fast! 🌱 More seeds will help me become the ultimate bird!",
-          "Callee, I feel so energetic! ⚡ These seeds are making me bigger and more graceful!",
+          "Piper, I feel so energetic! ⚡ These seeds are making me bigger and more graceful!",
           "Tweet tweet! I'm transforming! 🦋 Keep the seeds coming - I'm almost ready for the next stage!",
           "Incredible! My feathers are changing! 🦜 More seeds will help me reach my full potential!"
         ];
         return getRandomThought(growingThoughts);
       } else {
         const happyThoughts = [
-          "Tweet tweet! 🥳 I feel amazing, Callee! Now... could you get me some bird friends to fly with!",
+          "Tweet tweet! 🥳 I feel amazing, Piper! Now... could you get me some bird friends to fly with!",
           "Tweet tweet! I'm so strong now! 💪 Maybe it's time to find some playmates to soar with?",
           "I feel fantastic! 🌟 All those seeds worked! Now I'm ready for some aerial adventures with friends!",
-          "Amazing! I'm at my best! ✨ Callee, can you help me find some buddies to fly through clouds with?",
+          "Amazing! I'm at my best! ✨ Piper, can you help me find some buddies to fly through clouds with?",
           "Hooray! I'm fully grown! 🎉 Can you help me find some bird friends to play with?",
           "Perfect! I feel incredible! 🚀 Maybe it's time to find some playmates for sky adventures?"
         ];
         return getRandomThought(happyThoughts);
       }
     }
+
+    // Jennie-specific thoughts based on coins spent
+    if (currentPet === 'jennie' && isPetOwned('jennie')) {
+      const jennieCoinsSpent = getPetCoinsSpent('jennie');
+      
+      if (jennieCoinsSpent === 0) {
+        const hungryThoughts = [
+          "Hey Piper! 👩‍🎤 I'm Jennie! I need some energy to create amazing music... can you help me out?",
+          "Annyeong! It's me, Jennie! 🎵 I'm feeling a bit low on energy... could you give me some treats?",
+          "Hi there, Piper... Jennie here 👩‍🎤 My creative energy is running low... feed me, please?",
+          "Hey friend... I'm Jennie and I need fuel for my performances... 🍪 Do you have any treats?",
+          "Piper... It's your girl Jennie! 👩‍🎤 I haven't eaten yet and my energy is so low... can you help?",
+          "Piper... 🎵 My stomach is empty and I can't focus on music... treats would really help!"
+        ];
+        return getRandomThought(hungryThoughts);
+      } else if (jennieCoinsSpent < 30) {
+        const satisfiedThoughts = [
+          "Mmm... delicious! 🍪 More treats will give me energy to sing even better!",
+          "That was amazing! 😋 But I could definitely eat more treats, Piper!",
+          "Yum yum! 🍪 These treats are perfect! Can I have another one for my next performance?",
+          "So good! Those treats hit the spot! 👩‍🎤 But I'm still building up my energy!",
+          "Thank you, Piper! 🥰 Those treats were perfect, but I'm still a little hungry!",
+          "Delicious! 🍪 I'm feeling more energetic already! More treats would make me shine even brighter!"
+        ];
+        return getRandomThought(satisfiedThoughts);
+      } else if (jennieCoinsSpent < 50) {
+        const growingThoughts = [
+          "Wow! I'm getting stronger! 👩‍🎤 Keep feeding me - I'm ready for bigger performances!",
+          "Look at me glow! 💪 I can feel myself getting more confident with each treat!",
+          "Amazing! I'm growing so much! 🌱 More treats will help me become the ultimate performer!",
+          "Piper, I feel so energetic! ⚡ These treats are making me more talented and charismatic!",
+          "Yes! I'm transforming! 🦋 Keep the treats coming - I'm almost ready for the main stage!",
+          "Incredible! My performance skills are improving! 🎵 More treats will help me reach my full potential!"
+        ];
+        return getRandomThought(growingThoughts);
+      } else {
+        const happyThoughts = [
+          "Perfect! 🥳 I feel amazing, Piper! Now... could you find me some backup dancers to perform with?",
+          "Yes! I'm at my peak now! 💪 Maybe it's time to find some friends to start a group with?",
+          "I feel fantastic! 🌟 All those treats worked! Now I'm ready for collaborations with other artists!",
+          "Amazing! I'm at my best! ✨ Piper, can you help me find some talented friends to make music with?",
+          "Hooray! I'm fully powered up! 🎉 Can you help me find some artist friends to create with?",
+          "Perfect! I feel incredible! 🚀 Maybe it's time to find some creative partners for amazing performances?"
+        ];
+        return getRandomThought(happyThoughts);
+      }
+    }
     
-    // Default dog thoughts
+    // Default cat thoughts
     const coinsSpentOnFeeding = getCoinsSpentForCurrentStage(currentStreak);
     
     // Pet thoughts based on coins spent on feeding
     if (coinsSpentOnFeeding === 0) {
       // No coins spent on feeding yet
       const hungryThoughts = [
-        "Hi Callee... I'm April 🐶 and my tummy's rumbling sadly. Could you please feed me some cookies?",
-        "Woof... It's me, April! 🐕 I'm so hungry and feeling down... could you spare some cookies for me?",
-        "Hey there, Callee... April here 🐶 My belly is making sad noises... feed me, please?",
-        "Hi friend... I'm April and I'm starving... 🍪 Do you have any cookies to cheer me up?",
-        "Callee... It's your puppy April! 🐶 I haven't eaten yet and I'm feeling so low... can you help me out?",
-        "Callee... 🐕 My tummy feels so empty and sad... cookies would really lift my spirits!"
+        "Hi Piper... I'm Azrael 🐱 and my tummy's rumbling sadly. Could you please feed me some treats?",
+        "Meow... It's me, Azrael! 🐱 I'm so hungry and feeling down... could you spare some treats for me?",
+        "Hey there, Piper... Azrael here 🐱 My belly is making sad noises... feed me, please?",
+        "`Hi Piper... I'm Azrael and I'm starving... 🍪 Do you have any treats to cheer me up?`",
+        "Piper... It's your kitty Azrael! 🐱 I haven't eaten yet and I'm feeling so low... can you help me out?",
+        "Piper... 🐱 My tummy feels so empty and sad... treats would really lift my spirits!"
       ];
       return getRandomThought(hungryThoughts);
     } else if (coinsSpentOnFeeding < 30) {
       // 10-20 coins spent on feeding (1-2 feedings)
       const satisfiedThoughts = [
-        "Mmm… yummy! 🍪 More cookies will make me wag my tail even faster!",
-        "That was delicious! 😋 But I could definitely eat more cookies, Callee!",
-        "Nom nom nom! 🍪 These cookies are amazing! Can I have another one?",
-        "Woof! Those cookies hit the spot! 🐶 But my appetite is still growing!",
-        "Thank you, Callee! 🥰 Those cookies were perfect, but I'm still a little peckish!",
-        "Yum yum! 🍪 My tail is wagging so fast! More cookies would make me even happier!"
+        "Purr… yummy! 🍪 More treats will make me purr even louder!",
+        "That was delicious! 😋 But I could definitely eat more treats, Piper!",
+        "Nom nom nom! 🍪 These treats are amazing! Can I have another one?",
+        "Meow! Those treats hit the spot! 🐱 But my appetite is still growing!",
+        "Thank you, Piper! 🥰 Those treats were perfect, but I'm still a little peckish!",
+        "Yum yum! 🍪 My tail is swishing so fast! More treats would make me even happier!"
       ];
       return getRandomThought(satisfiedThoughts);
     } else if (coinsSpentOnFeeding < 50) {
       // 30-40 coins spent on feeding (3-4 feedings)
       const growingThoughts = [
-        "Woof woof! I'm growing stronger! 🐶 Keep feeding me - I'm getting bigger!",
-        "Look at me go! 💪 I can feel myself getting stronger with each cookie!",
-        "Amazing! I'm growing so fast! 🌱 More cookies will help me grow even more!",
-        "Callee, I feel so energetic! ⚡ These cookies are making me bigger and stronger!",
-        "Wag wag! I'm transforming! 🦋 Keep the cookies coming - I'm almost ready for the next stage!",
-        "Incredible! My body is changing! 🐕 More cookies will help me reach my full potential!"
+        "Meow meow! I'm feeling stronger! 🐱 Keep feeding me - I love these treats!",
+        "Look at me pounce! 💪 I can feel myself getting more energetic with each treat!",
+        "Amazing! These treats are so good! 🌱 More treats will help me feel even better!",
+        "Piper, I feel so energetic! ⚡ These treats are making me more playful and happy!",
+        "Purr purr! I'm feeling fantastic! 🦋 Keep the treats coming - they're delicious!",
+        "Incredible! I feel so full and content! 🐱 More treats will keep my tummy happy!"
       ];
       return getRandomThought(growingThoughts);
     } else {
       // 50+ coins spent on feeding (5+ feedings)
       const happyThoughts = [
-        "Yippee! 🥳 I feel amazing, Callee! Now… could you put me to sleep?",
-        "Woof woof! I'm so strong now! 💪 Maybe it's time for a nice nap?",
-        "I feel fantastic! 🌟 All those cookies worked! Now I'm ready for some sleep!",
-        "Amazing! I'm at my best! ✨ Callee, can you help me get some rest?",
-        "Hooray! I'm fully grown! 🎉 Can you help me go to sleep?",
-        "Perfect! I feel incredible! 🚀 Maybe it's time for a cozy nap?"
+        "Purr! 🥳 I feel amazing, Piper! Now… could you find me some cat friends to play with?",
+        "Meow meow! I'm so full and happy now! 💪 Maybe it's time to find some playmates to chase mice with?",
+        "I feel fantastic! 🌟 All those treats worked! Now I'm ready for some fun with friends!",
+        "Amazing! I'm at my best! ✨ Piper, can you help me find some buddies to explore with?",
+        "Hooray! I'm so content! 🎉 Can you help me find some cat friends to play with?",
+        "Perfect! I feel incredible! 🚀 Maybe it's time to find some playmates for adventures?"
       ];
       return getRandomThought(happyThoughts);
     }
@@ -863,7 +919,7 @@ export function PetPage({}: Props): JSX.Element {
 
   // Get coins spent for current pet
   const getCurrentPetCoinsSpent = () => {
-    if (currentPet === 'dog') {
+    if (currentPet === 'cat') {
       return getCoinsSpentForCurrentStage(currentStreak);
     } else {
       return getPetCoinsSpent(currentPet);
@@ -1130,13 +1186,13 @@ export function PetPage({}: Props): JSX.Element {
         </div>
       </div>
 
-      {/* Dog Evolution Display - Right Side */}
+      {/* Cat Evolution Display - Right Side */}
       <div className="absolute right-6 top-1/2 transform -translate-y-1/2 z-10 flex flex-col gap-4">
-        {/* Small Pup - Always available */}
+        {/* Small Kitten - Always available */}
         <div className="flex flex-col items-center">
           <div className="relative p-3 rounded-2xl border-2 transition-all duration-300 bg-gradient-to-br from-blue-100 to-cyan-100 border-blue-400 shadow-lg">
             <div className="text-5xl transition-all duration-300 grayscale-0">
-              🐶
+              🐱
             </div>
             <div className="absolute -top-2 -right-2 bg-green-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
               ✓
@@ -1147,7 +1203,7 @@ export function PetPage({}: Props): JSX.Element {
           </div>
         </div>
 
-        {/* Medium Dog - Unlocks at 2 consecutive days */}
+        {/* Medium Cat - Unlocks at 2 consecutive days */}
         <div className="flex flex-col items-center">
           <div className={`relative p-4 rounded-2xl border-2 transition-all duration-300 ${
             currentStreak >= 2 
@@ -1157,7 +1213,7 @@ export function PetPage({}: Props): JSX.Element {
             <div className={`text-6xl transition-all duration-300 ${
               currentStreak >= 2 ? 'grayscale-0' : 'grayscale'
             }`}>
-              🐕
+              😸
             </div>
             {currentStreak >= 2 && (
               <div className="absolute -top-2 -right-2 bg-green-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
@@ -1166,11 +1222,11 @@ export function PetPage({}: Props): JSX.Element {
             )}
           </div>
           <div className="text-xs font-semibold text-center mt-2 text-white drop-shadow-md">
-            {currentStreak >= 2 ? 'Medium Dog' : '2 Days 🔥'}
+            {currentStreak >= 2 ? 'Medium Cat' : '2 Days 🔥'}
           </div>
         </div>
 
-        {/* Large Dog - Unlocks at 3 consecutive days */}
+        {/* Large Cat - Unlocks at 3 consecutive days */}
         <div className="flex flex-col items-center">
           <div className={`relative p-4 rounded-2xl border-2 transition-all duration-300 ${
             currentStreak >= 3 
@@ -1180,7 +1236,7 @@ export function PetPage({}: Props): JSX.Element {
             <div className={`text-7xl transition-all duration-300 ${
               currentStreak >= 3 ? 'grayscale-0' : 'grayscale'
             }`}>
-              🐺
+              🦁
             </div>
             {currentStreak >= 3 && (
               <div className="absolute -top-2 -right-2 bg-green-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
@@ -1189,7 +1245,7 @@ export function PetPage({}: Props): JSX.Element {
             )}
           </div>
           <div className="text-xs font-semibold text-center mt-2 text-white drop-shadow-md">
-            {currentStreak >= 3 ? 'Large Dog' : '3 Days 🔥'}
+            {currentStreak >= 3 ? 'Large Cat' : '3 Days 🔥'}
           </div>
         </div>
 
@@ -1263,7 +1319,7 @@ export function PetPage({}: Props): JSX.Element {
             Your Pets:
           </div>
           {ownedPets.map((petId) => {
-            const petEmoji = petId === 'dog' ? '🐶' : petId === 'bobo' ? '🐵' : petId === 'feather' ? '🦜' : '🐾';
+            const petEmoji = petId === 'cat' ? '🐱' : petId === 'jennie' ? '👩‍🎤' : petId === 'dog' ? '🐶' : petId === 'bobo' ? '🐵' : petId === 'feather' ? '🦜' : '🐾';
             const isActive = currentPet === petId;
             
             return (
@@ -1275,7 +1331,7 @@ export function PetPage({}: Props): JSX.Element {
                     ? 'bg-gradient-to-br from-blue-500 to-purple-600 border-white text-white' 
                     : 'bg-white/20 backdrop-blur-md border-white/30 text-white hover:bg-white/30'
                 }`}
-                title={`Switch to ${petId === 'dog' ? 'Dog' : petId === 'bobo' ? 'Bobo' : petId === 'feather' ? 'Feather' : petId}`}
+                title={`Switch to ${petId === 'cat' ? 'Azrael' : petId === 'jennie' ? 'Jennie' : petId === 'dog' ? 'April' : petId === 'bobo' ? 'Bobo' : petId === 'feather' ? 'Feather' : petId}`}
               >
                 {petEmoji}
               </button>
@@ -1347,26 +1403,35 @@ export function PetPage({}: Props): JSX.Element {
                           <div className="text-8xl mb-4 animate-bounce">{selectedPet.emoji}</div>
                         </div>
                         
-                        <div className="p-4 bg-gradient-to-r from-purple-100 to-pink-100 rounded-xl border-2 border-purple-300">
-                          <button
-                            onClick={() => {
-                              handlePetPurchase(selectedPet.id, selectedPet.cost);
-                              // Refresh the store data to reflect new ownership
-                              setStoreRefreshTrigger(prev => prev + 1);
-                            }}
-                            disabled={!hasEnoughCoins(selectedPet.cost)}
-                            className={`w-full p-4 rounded-xl font-bold text-xl transition-all duration-200 ${
-                              hasEnoughCoins(selectedPet.cost)
-                                ? 'bg-gradient-to-r from-purple-500 to-pink-600 text-white hover:scale-105 shadow-lg'
-                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                            }`}
-                          >
-                            {hasEnoughCoins(selectedPet.cost) 
-                              ? `🎉 🪙 ${selectedPet.cost}`
-                              : `🔒 🪙 ${selectedPet.cost}`
-                            }
-                          </button>
-                        </div>
+                        {/* Check if this is a placeholder */}
+                        {(selectedPet as any).isPlaceholder ? (
+                          <div className="p-4 bg-gradient-to-r from-gray-100 to-gray-200 rounded-xl border-2 border-gray-300">
+                            <div className="text-center text-gray-600 font-semibold">
+                              🕰️ Coming Soon! More amazing pets will be added in future updates!
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-4 bg-gradient-to-r from-purple-100 to-pink-100 rounded-xl border-2 border-purple-300">
+                            <button
+                              onClick={() => {
+                                handlePetPurchase(selectedPet.id, selectedPet.cost);
+                                // Refresh the store data to reflect new ownership
+                                setStoreRefreshTrigger(prev => prev + 1);
+                              }}
+                              disabled={!hasEnoughCoins(selectedPet.cost)}
+                              className={`w-full p-4 rounded-xl font-bold text-xl transition-all duration-200 ${
+                                hasEnoughCoins(selectedPet.cost)
+                                  ? 'bg-gradient-to-r from-purple-500 to-pink-600 text-white hover:scale-105 shadow-lg'
+                                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                              }`}
+                            >
+                              {hasEnoughCoins(selectedPet.cost) 
+                                ? `🎉 🪙 ${selectedPet.cost}`
+                                : `🔒 🪙 ${selectedPet.cost}`
+                              }
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -1376,40 +1441,34 @@ export function PetPage({}: Props): JSX.Element {
                         <h3 className="text-3xl font-bold text-gray-800 mb-4 text-center">
                           🏠
                         </h3>
-                        <div className={`p-6 rounded-xl border-2 ${
-                          selectedPet.id === 'dog' 
-                            ? 'bg-gradient-to-br from-green-50 to-emerald-100 border-green-300'
-                            : 'bg-gradient-to-br from-gray-100 to-gray-200 border-gray-300 opacity-60'
-                        }`}>
+                        <div className="p-6 rounded-xl border-2 bg-gradient-to-br from-green-50 to-emerald-100 border-green-300">
                           <div className="text-center">
-                            <div className={`text-6xl mb-4 ${selectedPet.id !== 'dog' ? 'grayscale' : ''}`}>
+                            <div className="text-6xl mb-4">
                               {selectedPet.den.emoji}
                             </div>
                             <button
                               onClick={() => {
-                                if (selectedPet.id === 'dog') {
+                                if (selectedPet.id === 'cat') {
                                   if (purchaseDen(selectedPet.id, selectedPet.den.cost)) {
                                     playEvolutionSound();
-                                    alert(`🎉 You bought the den!`);
+                                    alert(`🎉 You bought the den! It will arrive in 24 hours!`);
                                   } else {
                                     alert(`Not enough coins! You need ${selectedPet.den.cost} coins.`);
                                   }
+                                } else {
+                                  alert(`🎉 You bought the den! It will arrive in 24 hours!`);
                                 }
                               }}
-                              disabled={selectedPet.id !== 'dog' || isDenOwned(selectedPet.id) || !hasEnoughCoins(selectedPet.den.cost)}
+                              disabled={isDenOwned(selectedPet.id) || !hasEnoughCoins(selectedPet.den.cost)}
                               className={`px-6 py-3 rounded-xl font-bold text-xl transition-all duration-200 ${
-                                selectedPet.id !== 'dog'
-                                  ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                                  : isDenOwned(selectedPet.id)
+                                isDenOwned(selectedPet.id)
                                   ? 'bg-green-500 text-white cursor-default'
                                   : hasEnoughCoins(selectedPet.den.cost)
                                   ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:scale-105 shadow-lg'
                                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                               }`}
                             >
-                              {selectedPet.id !== 'dog'
-                                ? '🔒'
-                                : isDenOwned(selectedPet.id)
+                              {isDenOwned(selectedPet.id)
                                 ? '✅'
                                 : hasEnoughCoins(selectedPet.den.cost)
                                 ? `🪙 ${selectedPet.den.cost}`
@@ -1429,23 +1488,50 @@ export function PetPage({}: Props): JSX.Element {
                     </h3>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                           {selectedPet.accessories.map((accessory) => {
-                            // All accessories are now locked
-                            const isLocked = true;
+                            const isOwned = isAccessoryOwned(selectedPet.id, accessory.id);
                             
                             return (
                               <div
                                 key={accessory.id}
-                                className="p-4 rounded-xl border-2 bg-gradient-to-br from-gray-100 to-gray-200 border-gray-300 opacity-60"
+                                className={`p-4 rounded-xl border-2 ${
+                                  isOwned 
+                                    ? 'bg-gradient-to-br from-green-100 to-emerald-100 border-green-300'
+                                    : 'bg-gradient-to-br from-gray-100 to-gray-200 border-gray-300'
+                                }`}
                               >
                                 <div className="text-center">
-                                  <div className="text-4xl grayscale mb-2">
+                                  <div className={`text-4xl mb-2 ${
+                                    isOwned ? '' : 'grayscale'
+                                  }`}>
                                     {accessory.emoji}
                                   </div>
+                                  <div className="text-xs text-gray-600 mb-2 font-medium">
+                                    {accessory.name}
+                                  </div>
                                   <button
-                                    disabled={true}
-                                    className="px-3 py-2 rounded-lg text-lg font-bold bg-gray-400 text-gray-600 cursor-not-allowed"
+                                    onClick={() => {
+                                      if (!isOwned && hasEnoughCoins(50)) {
+                                        if (purchaseAccessory(selectedPet.id, accessory.id, 50)) {
+                                          playEvolutionSound();
+                                          alert(`🎉 You bought ${accessory.name}! It will arrive in 24 hours!`);
+                                        }
+                                      }
+                                    }}
+                                    disabled={isOwned || !hasEnoughCoins(50)}
+                                    className={`px-3 py-2 rounded-lg text-lg font-bold transition-all duration-200 ${
+                                      isOwned
+                                        ? 'bg-green-500 text-white cursor-default'
+                                        : hasEnoughCoins(50)
+                                        ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:scale-105 shadow-lg'
+                                        : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                                    }`}
                                   >
-                                    🔒
+                                    {isOwned
+                                      ? '✅'
+                                      : hasEnoughCoins(50)
+                                      ? `🪙 50`
+                                      : `🔒 🪙 50`
+                                    }
                                   </button>
                     </div>
                   </div>
