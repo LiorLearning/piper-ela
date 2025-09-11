@@ -20,7 +20,7 @@ export function PetPage({}: Props): JSX.Element {
   const { coins, spendCoins, hasEnoughCoins, setCoins } = useCoins();
   
   // Use shared pet data system
-  const { careLevel, ownedPets, audioEnabled, setCareLevel, addOwnedPet, setAudioEnabled, isPetOwned, getCoinsSpentForCurrentStage, getPetCoinsSpent, addPetCoinsSpent } = usePetData();
+  const { careLevel, ownedPets, audioEnabled, setCareLevel, addOwnedPet, setAudioEnabled, isPetOwned, getCoinsSpentForCurrentStage, getPetCoinsSpent, addPetCoinsSpent, getSleepCoinsSpent, addSleepCoinsSpent } = usePetData();
   
   // Den and accessories state (stored in localStorage)
   const [ownedDens, setOwnedDens] = useState<string[]>(() => {
@@ -53,6 +53,14 @@ export function PetPage({}: Props): JSX.Element {
     const newOwnedDens = [...ownedDens, `${petType}_den`];
     setOwnedDens(newOwnedDens);
     localStorage.setItem('owned_dens', JSON.stringify(newOwnedDens));
+    
+    // Force immediate update of action states and thoughts
+    setTimeout(() => {
+      setActionStates(getActionStates());
+      // Reset last spoken message to ensure new den thoughts are spoken
+      setLastSpokenMessage('');
+    }, 100);
+    
     return true;
   };
   
@@ -77,29 +85,20 @@ export function PetPage({}: Props): JSX.Element {
   const [showPetShop, setShowPetShop] = useState(false);
   const [lastSpokenMessage, setLastSpokenMessage] = useState('');
   
+  // Image loading debounce state
+  const [isImageLoading, setIsImageLoading] = useState(false);
+  const [imageLoadTimeout, setImageLoadTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [currentAction, setCurrentAction] = useState<'food' | 'sleep' | null>(null);
+  
+  // Image preloading for faster transitions
+  const [preloadedImages, setPreloadedImages] = useState<Set<string>>(new Set());
+  
   // Pet store state
   const [selectedStorePet, setSelectedStorePet] = useState('cat'); // Which pet's store section is shown
   const [storeRefreshTrigger, setStoreRefreshTrigger] = useState(0); // Trigger to refresh store data
   
-  // Sleep state management with localStorage persistence
-  const [sleepClicks, setSleepClicks] = useState(() => {
-    try {
-      const stored = localStorage.getItem('pet_sleep_data');
-      if (stored) {
-        const sleepData = JSON.parse(stored);
-        const now = Date.now();
-        const eightHours = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
-        
-        // Check if 8 hours have passed since last sleep update
-        if (sleepData.timestamp && (now - sleepData.timestamp) < eightHours) {
-          return sleepData.clicks || 0;
-        }
-      }
-      return 0;
-    } catch {
-      return 0;
-    }
-  });
+  // Get current sleep coins spent for the current pet
+  const getCurrentSleepCoinsSpent = () => getSleepCoinsSpent(currentPet);
   
   // Streak system for dog evolution unlocks - based on consecutive calendar days (US timezone)
   const [currentStreak, setCurrentStreak] = useState(() => {
@@ -214,29 +213,13 @@ export function PetPage({}: Props): JSX.Element {
     
     // Initialize previous coins spent for current stage
     setPreviousCoinsSpentForStage(getCoinsSpentForCurrentStage(currentStreak));
-    
-    // Check if sleep should be reset due to 8-hour timeout
-    checkSleepTimeout();
-  }, []);
-
-  // Periodically check for sleep timeout (every minute when component is active)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      checkSleepTimeout();
-    }, 60000); // Check every minute
-
-    return () => clearInterval(interval);
   }, []);
 
   // Update action states when den ownership or sleep state changes
   useEffect(() => {
     setActionStates(getActionStates());
-  }, [currentPet, sleepClicks, ownedDens]);
+  }, [currentPet, ownedDens, getCurrentSleepCoinsSpent()]);
 
-  // Reset sleep when switching pets
-  useEffect(() => {
-    resetSleep();
-  }, [currentPet]);
   
   // TTS message ID for tracking speaking state
   const petMessageId = 'pet-message';
@@ -248,10 +231,20 @@ export function PetPage({}: Props): JSX.Element {
       { id: 'water', icon: '🍪', status: 'sad' as ActionStatus, label: 'Food' },
     ];
     
-    // Add sleep button if den is owned and sleep clicks < 5
-    if (isDenOwned(currentPet) && sleepClicks < 5) {
-      const sleepLabel = sleepClicks === 0 ? 'Sleep' : `Sleep ${sleepClicks}/5`;
-      baseActions.push({ id: 'sleep', icon: '😴', status: 'neutral' as ActionStatus, label: sleepLabel });
+    // Add sleep button if den is owned and sleep coins spent < 50
+    if (isDenOwned(currentPet)) {
+      const sleepCoinsSpent = getCurrentSleepCoinsSpent();
+      if (sleepCoinsSpent < 50) {
+        let sleepLabel = 'Sleep';
+        if (sleepCoinsSpent >= 30) {
+          sleepLabel = 'Sleep)';
+        } else if (sleepCoinsSpent >= 10) {
+          sleepLabel = 'Sleep';
+        } else if (sleepCoinsSpent > 0) {
+          sleepLabel = 'Sleep';
+        }
+        baseActions.push({ id: 'sleep', icon: '😴', status: 'neutral' as ActionStatus, label: sleepLabel });
+      }
     }
     
     // Always add more button at the end
@@ -270,19 +263,57 @@ export function PetPage({}: Props): JSX.Element {
         return;
       }
       
-      // Increment sleep clicks (max 5)
-      if (sleepClicks < 5) {
-        updateSleepClicks(sleepClicks + 1);
-        // Play a gentle sleep sound
-        playFeedingSound(); // Reuse feeding sound for now
-        
-        // Trigger heart animation for sleep progress
-        setShowHeartAnimation(true);
-        setTimeout(() => setShowHeartAnimation(false), 1000);
-        
-        // Stop any current audio when pet gets sleepier
-        ttsService.stop();
+      // Prevent sleep action if image is still loading
+      if (isImageLoading) {
+        return;
       }
+      
+      const currentSleepCoins = getCurrentSleepCoinsSpent();
+      const nextCost = 10; // Each sleep upgrade always costs 10 coins
+      
+      // Check if already at max sleep level (50 coins)
+      if (currentSleepCoins >= 50) {
+        alert("Your pet is already at maximum sleep comfort!");
+        return;
+      }
+      
+      // Check if player has enough coins
+      if (!hasEnoughCoins(nextCost)) {
+        alert(`Not enough coins! You need ${nextCost} coins to upgrade sleep comfort.`);
+        return;
+      }
+      
+      // Set loading state and start timeout for sleep action
+      setIsImageLoading(true);
+      setCurrentAction('sleep');
+      
+      // Clear any existing timeout
+      if (imageLoadTimeout) {
+        clearTimeout(imageLoadTimeout);
+      }
+      
+      // Set 2-second timeout fallback
+      const timeout = setTimeout(() => {
+        setIsImageLoading(false);
+        setCurrentAction(null);
+        setImageLoadTimeout(null);
+      }, 2000);
+      setImageLoadTimeout(timeout);
+      
+      // Spend coins and add to sleep coins spent
+      spendCoins(nextCost);
+      addSleepCoinsSpent(currentPet, nextCost);
+      
+      // Play a gentle sleep sound
+      playFeedingSound(); // Reuse feeding sound for now
+      
+      // Trigger heart animation for sleep progress
+      setShowHeartAnimation(true);
+      setTimeout(() => setShowHeartAnimation(false), 600);
+      
+      // Stop any current audio when pet gets sleepier
+      ttsService.stop();
+      
       return;
     }
 
@@ -294,11 +325,33 @@ export function PetPage({}: Props): JSX.Element {
       return;
     }
 
+    // Prevent feeding if image is still loading
+    if (isImageLoading) {
+      return;
+    }
+
     // Check if player has enough coins for feeding actions
     if (!hasEnoughCoins(10)) {
       alert("Not enough coins! You need 10 coins to perform this action.");
       return;
     }
+
+    // Set loading state and start timeout
+    setIsImageLoading(true);
+    setCurrentAction('food');
+    
+    // Clear any existing timeout
+    if (imageLoadTimeout) {
+      clearTimeout(imageLoadTimeout);
+    }
+    
+    // Set 2-second timeout fallback (most images load much faster)
+    const timeout = setTimeout(() => {
+      setIsImageLoading(false);
+      setCurrentAction(null);
+      setImageLoadTimeout(null);
+    }, 2000);
+    setImageLoadTimeout(timeout);
 
     // Play feeding sound
     playFeedingSound();
@@ -315,7 +368,7 @@ export function PetPage({}: Props): JSX.Element {
 
     // Trigger heart animation
     setShowHeartAnimation(true);
-    setTimeout(() => setShowHeartAnimation(false), 1000);
+    setTimeout(() => setShowHeartAnimation(false), 600);
 
     // Update action status to happy
     setActionStates(prev => prev.map(action => 
@@ -325,51 +378,6 @@ export function PetPage({}: Props): JSX.Element {
     ));
   };
 
-  // Save sleep data to localStorage
-  const saveSleepData = (clicks: number) => {
-    try {
-      const sleepData = {
-        clicks: clicks,
-        timestamp: Date.now()
-      };
-      localStorage.setItem('pet_sleep_data', JSON.stringify(sleepData));
-    } catch (error) {
-      console.warn('Failed to save sleep data:', error);
-    }
-  };
-
-  // Update sleep clicks and save to localStorage
-  const updateSleepClicks = (newClicks: number) => {
-    setSleepClicks(newClicks);
-    saveSleepData(newClicks);
-  };
-
-  // Reset sleep when needed (e.g., when switching pets or after full sleep cycle)
-  const resetSleep = () => {
-    setSleepClicks(0);
-    saveSleepData(0);
-  };
-
-  // Check if sleep should be reset due to 8-hour timeout
-  const checkSleepTimeout = () => {
-    try {
-      const stored = localStorage.getItem('pet_sleep_data');
-      if (stored) {
-        const sleepData = JSON.parse(stored);
-        const now = Date.now();
-        const eightHours = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
-        
-        // If 8 hours have passed, reset sleep
-        if (sleepData.timestamp && (now - sleepData.timestamp) >= eightHours) {
-          resetSleep();
-          return true; // Sleep was reset
-        }
-      }
-      return false; // No reset needed
-    } catch {
-      return false;
-    }
-  };
 
   const getStatusEmoji = (status: ActionStatus) => {
     switch (status) {
@@ -478,27 +486,28 @@ export function PetPage({}: Props): JSX.Element {
     }
   };
 
-  // Get sleepy pet images based on sleep clicks
-  const getSleepyPetImage = (clicks: number) => {
-    if (clicks >= 5) {
-      // Fully asleep cat - using most evolved cat image
-      return "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250909_234447_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
-    } else if (clicks >= 3) {
-      // Deep sleep cat - using 30+ coin cat image
-      return "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250909_234441_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
-    } else if (clicks >= 1) {
-      // Getting sleepy cat - using 10+ coin cat image
-      return "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250909_234455_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+  // Get sleepy pet images based on sleep coins spent
+  const getSleepyPetImage = (sleepCoinsSpent: number) => {
+    if (sleepCoinsSpent >= 50) {
+      // 50 coins spent - TBD image (placeholder for now)
+      return "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250911_160705_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+    } else if (sleepCoinsSpent >= 30) {
+      // 30 coins spent - TBD image (placeholder for now)
+      return "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250911_155438_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+    } else if (sleepCoinsSpent >= 10) {
+      // 10 coins spent - TBD image (placeholder for now)
+      return "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250911_155621_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
     } else {
-      // Starting to sleep cat - using base cat image
-      return "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250909_234430_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+      // 0 coins spent - use the provided image
+      return "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250911_153821_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
     }
   };
 
   const getPetImage = () => {
-    // If pet is in sleep mode (sleepClicks > 0), show sleepy images
-    if (sleepClicks > 0 && currentPet === 'cat') {
-      return getSleepyPetImage(sleepClicks);
+    // If den is owned, show sleep images based on sleep coins spent
+    if (isDenOwned(currentPet) && currentPet === 'cat') {
+      const sleepCoinsSpent = getCurrentSleepCoinsSpent();
+      return getSleepyPetImage(sleepCoinsSpent);
     }
     
     // Check if Bobo is owned and being displayed
@@ -600,9 +609,9 @@ export function PetPage({}: Props): JSX.Element {
     // Special message for Bobo and Feather about arrival time
     if (petType === 'bobo' || petType === 'feather') {
       const petName = petType === 'bobo' ? 'Bobo' : 'Feather';
-      alert(`🎉 Congratulations! You bought ${petName}! 🚚 Your new pet will arrive in your pet park within 24 hours!`);
+      alert(`Congratulations! You bought ${petName}! Your new pet will arrive in your pet park within 24 hours!`);
     } else {
-      alert(`🎉 Congratulations! You bought a ${petType}!`);
+      alert(`Congratulations! You bought a ${petType}!`);
     }
   };
 
@@ -693,35 +702,47 @@ export function PetPage({}: Props): JSX.Element {
       return thoughts[Math.floor(Math.random() * thoughts.length)];
     };
     
-    // If pet is sleeping, show sleep-related thoughts
-    if (sleepClicks > 0) {
-      const sleepThoughts = [
-        "Zzz... 😴 I'm getting so sleepy... this feels nice...",
-        "💤 Yawn... I'm drifting off to dreamland...",
-        "😴 So cozy and warm... perfect for a nap...",
-        "Zzz... 💭 I'm dreaming of cookies and adventures...",
-        "😴 This is the best sleep ever... so peaceful...",
-        "💤 Sweet dreams... I feel so relaxed and happy..."
-      ];
+    // If pet has a den, show sleep-related thoughts based on sleep coins spent
+    if (isDenOwned(currentPet)) {
+      const sleepCoinsSpent = getCurrentSleepCoinsSpent();
       
-      if (sleepClicks >= 5) {
+      if (sleepCoinsSpent >= 50) {
+        const maxSleepThoughts = [
+          "💤💤💤 Zzz... Piper, I'm completely asleep... dreaming peacefully...",
+          "😴 Piper... I'm deep in dreamland... having the most wonderful dreams...",
+          "💤 Piper, I'm fully rested... sleeping like a baby...",
+          "Zzz... 🌙 Piper, I'm in the deepest, most comfortable sleep..."
+        ];
+        return getRandomThought(maxSleepThoughts);
+      } else if (sleepCoinsSpent >= 30) {
         const deepSleepThoughts = [
-          "💤💤💤 Zzz... completely asleep... dreaming peacefully...",
-          "😴 Deep in dreamland... having the most wonderful dreams...",
-          "💤 Fully rested... sleeping like a baby...",
-          "Zzz... 🌙 In the deepest, most comfortable sleep..."
+          "😴 Piper, I'm getting very drowsy... almost fully asleep...",
+          "💤 Piper, I'm so sleepy... my eyelids are getting heavy...",
+          "Zzz... 😴 Piper, I'm drifting deeper into sleep...",
+          "💤 Piper, I'm almost there... feeling so relaxed and sleepy..."
         ];
         return getRandomThought(deepSleepThoughts);
-      } else if (sleepClicks >= 3) {
-        const drowsyThoughts = [
-          "😴 Getting very drowsy... almost fully asleep...",
-          "💤 So sleepy... my eyelids are getting heavy...",
-          "Zzz... 😴 Drifting deeper into sleep...",
-          "💤 Almost there... feeling so relaxed and sleepy..."
+      } else if (sleepCoinsSpent >= 10) {
+        const sleepyThoughts = [
+          "Zzz... 😴 Piper, I'm getting so sleepy... this feels nice...",
+          "💤 Yawn... Piper, I'm drifting off to dreamland...",
+          "😴 Piper, it's so cozy and warm... perfect for a nap...",
+          "Zzz... 💭 Piper, I'm dreaming of cookies and adventures..."
         ];
-        return getRandomThought(drowsyThoughts);
+        return getRandomThought(sleepyThoughts);
       } else {
-        return getRandomThought(sleepThoughts);
+        // 0 coins spent - show initial den/sleep thoughts
+        const initialDenThoughts = [
+          "😴 Wow! Piper, I have my own den now! This is so cozy and comfortable...",
+          "💤 Piper, having my own special place makes me feel so safe and sleepy...",
+          "😴 Piper, this den is perfect for resting! I could take a nice nap here...",
+          "💤 Piper, my very own den! Now I can sleep peacefully whenever I want...",
+          "😴 Piper, I love having a cozy place to call my own! Time for some rest...",
+          "💤 Piper, this den is so comfortable... I'm already feeling drowsy...",
+          "😴 Piper, finally, a safe and warm place to sleep! This feels amazing!",
+          "💤 Piper, my own little sanctuary! Perfect for sweet dreams and rest..."
+        ];
+        return getRandomThought(initialDenThoughts);
       }
     }
     
@@ -929,20 +950,79 @@ export function PetPage({}: Props): JSX.Element {
   // Get current pet coins spent value
   const currentPetCoinsSpent = getCurrentPetCoinsSpent();
 
+  // Image loading handlers
+  const handleImageLoad = () => {
+    // Clear timeout and reset loading state when image loads successfully
+    if (imageLoadTimeout) {
+      clearTimeout(imageLoadTimeout);
+      setImageLoadTimeout(null);
+    }
+    setIsImageLoading(false);
+    setCurrentAction(null);
+  };
+
+  const handleImageError = () => {
+    // Clear timeout and reset loading state on error
+    if (imageLoadTimeout) {
+      clearTimeout(imageLoadTimeout);
+      setImageLoadTimeout(null);
+    }
+    setIsImageLoading(false);
+    setCurrentAction(null);
+    console.warn('Pet image failed to load');
+  };
+
+  // Preload next evolution images for faster transitions
+  const preloadImage = (url: string) => {
+    if (preloadedImages.has(url)) return;
+    
+    const img = new Image();
+    img.onload = () => {
+      setPreloadedImages(prev => new Set([...prev, url]));
+    };
+    img.onerror = () => {
+      console.warn('Failed to preload image:', url);
+    };
+    img.src = url;
+  };
+
+  // Get next evolution image URL for preloading
+  const getNextEvolutionImage = () => {
+    const coinsSpentOnFeeding = getCoinsSpentForCurrentStage(currentStreak);
+    
+    if (currentPet === 'cat') {
+      if (currentStreak >= 3) {
+        if (coinsSpentOnFeeding >= 30 && coinsSpentOnFeeding < 50) {
+          return "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250909_234447_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+        } else if (coinsSpentOnFeeding >= 10 && coinsSpentOnFeeding < 30) {
+          return "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250909_234441_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+        } else if (coinsSpentOnFeeding < 10) {
+          return "https://tutor.mathkraft.org/_next/image?url=%2Fapi%2Fproxy%3Furl%3Dhttps%253A%252F%252Fdubeus2fv4wzz.cloudfront.net%252Fimages%252F20250909_234455_image.png&w=3840&q=75&dpl=dpl_2uGXzhZZsLneniBZtsxr7PEabQXN";
+        }
+      }
+    }
+    return null;
+  };
+
   // Calculate heart fill percentage based on coins and sleep (if sleep is available)
   const getHeartFillPercentage = () => {
-    const hasSleepButton = isDenOwned(currentPet);
+    const hasDen = isDenOwned(currentPet);
     
-    if (hasSleepButton) {
-      // When sleep is available, heart fill requires both coins (50%) and sleep (50%)
-      const coinProgress = Math.min(currentPetCoinsSpent / 50, 1); // Max 50 coins = 100% of coin portion
-      const sleepProgress = Math.min(sleepClicks / 5, 1); // Max 5 clicks = 100% of sleep portion
+    if (hasDen) {
+      // When den is owned, heart fill is primarily based on sleep progress
+      const sleepCoinsSpent = getCurrentSleepCoinsSpent();
+      const sleepProgress = Math.min(sleepCoinsSpent / 50, 1); // Max 50 sleep coins = 100%
       
-      // Each contributes 50% to the total heart fill
-      const totalProgress = (coinProgress * 0.5) + (sleepProgress * 0.5);
-      return Math.min(totalProgress * 100, 100); // Convert to percentage, max 100%
+      // Sleep fills the heart completely when at max (50 coins)
+      if (sleepCoinsSpent >= 50) {
+        return 100; // Fully filled when fully asleep
+      }
+      
+      // Progressive fill based on sleep coins: 0, 10, 20, 30, 40, 50
+      // Each 10 coins = 20% fill (50 coins = 100%)
+      return (sleepCoinsSpent / 50) * 100;
     } else {
-      // When sleep is not available, heart fill is based only on coins
+      // When sleep is not available, heart fill is based only on food coins
       const coinProgress = Math.min(currentPetCoinsSpent / 50, 1);
       return Math.min(coinProgress * 100, 100);
     }
@@ -951,7 +1031,7 @@ export function PetPage({}: Props): JSX.Element {
   // Memoize the pet thought so it only changes when the actual state changes
   const currentPetThought = useMemo(() => {
     return getPetThought();
-  }, [currentPet, getCoinsSpentForCurrentStage(currentStreak), getPetCoinsSpent(currentPet), sleepClicks]);
+  }, [currentPet, getCoinsSpentForCurrentStage(currentStreak), getPetCoinsSpent(currentPet), getCurrentSleepCoinsSpent(), ownedDens]);
 
   // Handle audio playback when message changes
   useEffect(() => {
@@ -970,6 +1050,40 @@ export function PetPage({}: Props): JSX.Element {
       return () => clearTimeout(timer);
     }
   }, [currentPetThought, showPetShop, audioEnabled, lastSpokenMessage]);
+
+  // Handle when pet shop closes - ensure voice plays new thoughts immediately
+  useEffect(() => {
+    if (!showPetShop && audioEnabled) {
+      // Reset last spoken message when pet shop closes to ensure new thoughts are spoken
+      setLastSpokenMessage('');
+      
+      // Small delay to ensure the thought has updated after den purchase
+      const timer = setTimeout(() => {
+        if (currentPetThought) {
+          speakText(currentPetThought);
+        }
+      }, 300);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [showPetShop]); // Only trigger when showPetShop changes
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (imageLoadTimeout) {
+        clearTimeout(imageLoadTimeout);
+      }
+    };
+  }, [imageLoadTimeout]);
+
+  // Preload next evolution image when user is close to evolution
+  useEffect(() => {
+    const nextImageUrl = getNextEvolutionImage();
+    if (nextImageUrl) {
+      preloadImage(nextImageUrl);
+    }
+  }, [currentPetCoinsSpent, currentStreak, currentPet]);
 
   return (
     <div className="min-h-screen flex flex-col" style={{
@@ -1058,7 +1172,7 @@ export function PetPage({}: Props): JSX.Element {
               fontSize: 84,
               color: '#DC2626',
               clipPath: `inset(${Math.max(0, 100 - getHeartFillPercentage())}% 0 0 0)`,
-              transition: 'clip-path 500ms ease'
+              transition: 'clip-path 300ms ease-out'
             }}>
               ❤️
             </div>
@@ -1115,25 +1229,25 @@ export function PetPage({}: Props): JSX.Element {
         {/* Pet Thought Bubble - Only show when pet shop is closed */}
         {!showPetShop && (
           <div className={`relative rounded-3xl p-5 mb-8 border-3 shadow-xl max-w-md w-full mx-4 backdrop-blur-sm ${
-            sleepClicks > 0 
+            isDenOwned(currentPet) && getCurrentSleepCoinsSpent() > 0 
               ? 'bg-gradient-to-br from-purple-50 to-indigo-100 border-purple-400 bg-purple-50/90'
               : 'bg-gradient-to-br from-blue-50 to-cyan-50 border-blue-400 bg-white/90'
           }`}>
             {/* Speech bubble tail */}
             <div className={`absolute -bottom-3 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-[12px] border-r-[12px] border-t-[12px] border-l-transparent border-r-transparent ${
-              sleepClicks > 0 ? 'border-t-purple-400' : 'border-t-blue-400'
+              isDenOwned(currentPet) && getCurrentSleepCoinsSpent() > 0 ? 'border-t-purple-400' : 'border-t-blue-400'
             }`}></div>
             
             {/* Thought bubble dots */}
             <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 flex gap-1">
               <div className={`w-2 h-2 rounded-full animate-bounce ${
-                sleepClicks > 0 ? 'bg-purple-400' : 'bg-blue-400'
+                isDenOwned(currentPet) && getCurrentSleepCoinsSpent() > 0 ? 'bg-purple-400' : 'bg-blue-400'
               }`} style={{animationDelay: '0s'}}></div>
               <div className={`w-1.5 h-1.5 rounded-full animate-bounce ${
-                sleepClicks > 0 ? 'bg-purple-400' : 'bg-blue-400'
+                isDenOwned(currentPet) && getCurrentSleepCoinsSpent() > 0 ? 'bg-purple-400' : 'bg-blue-400'
               }`} style={{animationDelay: '0.3s'}}></div>
               <div className={`w-1 h-1 rounded-full animate-bounce ${
-                sleepClicks > 0 ? 'bg-purple-400' : 'bg-blue-400'
+                isDenOwned(currentPet) && getCurrentSleepCoinsSpent() > 0 ? 'bg-purple-400' : 'bg-blue-400'
               }`} style={{animationDelay: '0.6s'}}></div>
             </div>
 
@@ -1149,33 +1263,46 @@ export function PetPage({}: Props): JSX.Element {
             src={getPetImage()}
             alt="Pet"
             className={`object-contain rounded-2xl transition-all duration-700 ease-out hover:scale-105 ${
-              sleepClicks > 0 ? 'w-96 h-96 mt-8' : 'w-80 h-80'
-            }`}
+              isDenOwned(currentPet) && getCurrentSleepCoinsSpent() > 0 ? 'w-96 h-96 mt-8' : 'w-80 h-80'
+            } ${isImageLoading ? 'opacity-70' : 'opacity-100'}`}
             style={{
               animation: careLevel * 10 >= 30 && careLevel * 10 < 50 ? 'petGrow 800ms ease-out' : 
                         careLevel * 10 >= 50 ? 'petEvolve 800ms ease-out' : 'none'
             }}
+            onLoad={handleImageLoad}
+            onError={handleImageError}
           />
           
-          {/* Sleep indicator */}
-          {sleepClicks > 0 && (
-            <>
-              {/* Sleep counter */}
-              <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm rounded-full px-3 py-1 text-sm font-bold text-gray-800 shadow-lg">
-                😴 {sleepClicks}/5
+          {/* Loading overlay */}
+          {isImageLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-white/20 backdrop-blur-sm rounded-2xl">
+              <div className="flex flex-col items-center gap-3">
+                {/* Animated action icon */}
+                <div className="text-4xl animate-bounce">
+                  {currentAction === 'sleep' ? '😴' : '🍪'}
+                </div>
+                {/* Spinner */}
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                <div className="text-white text-sm font-semibold drop-shadow-md animate-pulse">
+                  {currentAction === 'sleep' ? 'Getting sleepy...' : 'Eating...'}
+                </div>
+                {/* Progress dots */}
+                <div className="flex gap-1">
+                  <div className="w-2 h-2 bg-white rounded-full animate-pulse" style={{animationDelay: '0s'}}></div>
+                  <div className="w-2 h-2 bg-white rounded-full animate-pulse" style={{animationDelay: '0.2s'}}></div>
+                  <div className="w-2 h-2 bg-white rounded-full animate-pulse" style={{animationDelay: '0.4s'}}></div>
+                </div>
               </div>
-              
+            </div>
+          )}
+          
+          {/* Sleep indicator */}
+          {isDenOwned(currentPet) && getCurrentSleepCoinsSpent() > 0 && (
+            <>
               {/* Floating Z's animation */}
               <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 text-2xl animate-bounce">
                 💤
               </div>
-              
-              {/* Fully asleep message */}
-              {sleepClicks >= 5 && (
-                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-blue-400 to-purple-500 text-white px-4 py-2 rounded-xl font-bold shadow-lg">
-                  😴 Fully Asleep
-                </div>
-              )}
             </>
           )}
         </div>
@@ -1258,7 +1385,12 @@ export function PetPage({}: Props): JSX.Element {
           <button
             key={action.id}
             onClick={() => handleActionClick(action.id)}
-            className="flex flex-col items-center gap-1 p-3 bg-transparent border-none cursor-pointer rounded-xl min-w-16 transition-all duration-200 hover:bg-white/20 hover:-translate-y-1 active:scale-95"
+            disabled={(action.id === 'water' || action.id === 'sleep') && isImageLoading}
+            className={`flex flex-col items-center gap-1 p-3 bg-transparent border-none rounded-xl min-w-16 transition-all duration-150 ${
+              (action.id === 'water' || action.id === 'sleep') && isImageLoading 
+                ? 'opacity-50 cursor-not-allowed' 
+                : 'cursor-pointer hover:bg-white/20 hover:-translate-y-1 active:scale-95 active:bg-white/30'
+            }`}
           >
             {/* Status emoji */}
             {getStatusEmoji(action.status) && (
@@ -1277,17 +1409,21 @@ export function PetPage({}: Props): JSX.Element {
               {action.label}
             </div>
             
-            {/* Coin cost for Food action */}
+                            {/* Coin cost for Food action */}
             {action.id === 'water' && (
               <div className="text-xs font-semibold text-yellow-300 drop-shadow-md">
-                🪙 10
+                {isImageLoading ? 'Eating...' : '10 coins'}
               </div>
             )}
             
-            {/* Free indicator for Sleep action */}
+            {/* Cost indicator for Sleep action */}
             {action.id === 'sleep' && (
-              <div className="text-xs font-semibold text-green-300 drop-shadow-md">
-                Free
+              <div className="text-xs font-semibold text-yellow-300 drop-shadow-md">
+                {(() => {
+                  const currentSleepCoins = getCurrentSleepCoinsSpent();
+                  if (currentSleepCoins >= 50) return 'Max level';
+                  return isImageLoading ? 'Sleeping...' : '10 coins';
+                })()}
               </div>
             )}
           </button>
@@ -1355,7 +1491,7 @@ export function PetPage({}: Props): JSX.Element {
             {/* Left Column: Pet Selection */}
             <div className="w-1/4 bg-gradient-to-b from-blue-50 to-indigo-100 p-4 border-r-2 border-gray-200">
               <h3 className="text-2xl font-bold text-gray-800 mb-4 text-center">
-                🐾
+                Pets
               </h3>
               <div className="space-y-2">
                 {Object.values(getPetStoreData()).map((pet) => (
@@ -1375,7 +1511,7 @@ export function PetPage({}: Props): JSX.Element {
               
               {/* Current coins display */}
               <div className="mt-4 p-3 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-xl text-white font-semibold text-center shadow-lg">
-                💰 {coins}
+                Coins: {coins}
               </div>
             </div>
 
@@ -1389,7 +1525,6 @@ export function PetPage({}: Props): JSX.Element {
                   <div>
             {/* Header */}
             <div className="text-center mb-6">
-                      <div className="text-6xl mb-4">{selectedPet.emoji}</div>
                       <h2 className="text-3xl font-bold text-gray-800">
                         {selectedPet.name}
               </h2>
@@ -1426,8 +1561,8 @@ export function PetPage({}: Props): JSX.Element {
                               }`}
                             >
                               {hasEnoughCoins(selectedPet.cost) 
-                                ? `🎉 🪙 ${selectedPet.cost}`
-                                : `🔒 🪙 ${selectedPet.cost}`
+                                ? `Buy for ${selectedPet.cost} coins`
+                                : `Need ${selectedPet.cost} coins`
                               }
                             </button>
                           </div>
@@ -1438,8 +1573,8 @@ export function PetPage({}: Props): JSX.Element {
                     {/* Den Section */}
                     {selectedPet.owned && (
                       <div className="mb-6">
-                        <h3 className="text-3xl font-bold text-gray-800 mb-4 text-center">
-                          🏠
+                        <h3 className="text-xl font-bold text-gray-800 mb-4 text-center">
+                          Den
                         </h3>
                         <div className="p-6 rounded-xl border-2 bg-gradient-to-br from-green-50 to-emerald-100 border-green-300">
                           <div className="text-center">
@@ -1451,7 +1586,7 @@ export function PetPage({}: Props): JSX.Element {
                                 if (selectedPet.id === 'cat') {
                                   if (purchaseDen(selectedPet.id, selectedPet.den.cost)) {
                                     playEvolutionSound();
-                                    alert(`🎉 You bought the den! It will arrive in 24 hours!`);
+                                    alert(`You bought the den! It will arrive in 24 hours!`);
                                   } else {
                                     alert(`Not enough coins! You need ${selectedPet.den.cost} coins.`);
                                   }
@@ -1469,10 +1604,10 @@ export function PetPage({}: Props): JSX.Element {
                               }`}
                             >
                               {isDenOwned(selectedPet.id)
-                                ? '✅'
+                                ? 'Owned'
                                 : hasEnoughCoins(selectedPet.den.cost)
-                                ? `🪙 ${selectedPet.den.cost}`
-                                : `🔒 🪙 ${selectedPet.den.cost}`
+                                ? `Buy for ${selectedPet.den.cost} coins`
+                                : `Need ${selectedPet.den.cost} coins`
                               }
                             </button>
                           </div>
@@ -1483,8 +1618,8 @@ export function PetPage({}: Props): JSX.Element {
                     {/* Accessories Section */}
                     {selectedPet.owned && (
                       <div>
-                        <h3 className="text-3xl font-bold text-gray-800 mb-4 text-center">
-                          🎁
+                        <h3 className="text-xl font-bold text-gray-800 mb-4 text-center">
+                          Accessories
                     </h3>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                           {selectedPet.accessories.map((accessory) => {
@@ -1513,7 +1648,7 @@ export function PetPage({}: Props): JSX.Element {
                                       if (!isOwned && hasEnoughCoins(50)) {
                                         if (purchaseAccessory(selectedPet.id, accessory.id, 50)) {
                                           playEvolutionSound();
-                                          alert(`🎉 You bought ${accessory.name}! It will arrive in 24 hours!`);
+                                          alert(`You bought ${accessory.name}! It will arrive in 24 hours!`);
                                         }
                                       }
                                     }}
@@ -1527,10 +1662,10 @@ export function PetPage({}: Props): JSX.Element {
                                     }`}
                                   >
                                     {isOwned
-                                      ? '✅'
+                                      ? 'Owned'
                                       : hasEnoughCoins(50)
-                                      ? `🪙 50`
-                                      : `🔒 🪙 50`
+                                      ? 'Buy for 50 coins'
+                                      : 'Need 50 coins'
                                     }
                                   </button>
                     </div>

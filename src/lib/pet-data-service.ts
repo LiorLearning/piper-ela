@@ -15,6 +15,10 @@ export interface PetData {
   petCoinsSpent: {
     [petId: string]: number; // e.g., 'bobo': 30, 'feather': 20
   };
+  // Track coins spent on sleep per pet type
+  sleepCoinsSpent: {
+    [petId: string]: number; // e.g., 'cat': 30, 'jennie': 10
+  };
 }
 
 export class PetDataService {
@@ -30,7 +34,8 @@ export class PetDataService {
       largeDog: 0
     },
     lastStreakLevel: 0,
-    petCoinsSpent: {}
+    petCoinsSpent: {},
+    sleepCoinsSpent: {}
   };
 
   // Get current pet data from localStorage
@@ -61,6 +66,10 @@ export class PetDataService {
           // Ensure petCoinsSpent exists (for backward compatibility)
           if (!parsed.petCoinsSpent) {
             parsed.petCoinsSpent = {};
+          }
+          // Ensure sleepCoinsSpent exists (for backward compatibility)
+          if (!parsed.sleepCoinsSpent) {
+            parsed.sleepCoinsSpent = {};
           }
           return {
             ...this.DEFAULT_DATA,
@@ -190,6 +199,24 @@ export class PetDataService {
     });
   }
 
+  // Get coins spent on sleep for a specific pet
+  static getSleepCoinsSpent(petId: string): number {
+    const data = this.getPetData();
+    return data.sleepCoinsSpent[petId] || 0;
+  }
+
+  // Add coins spent on sleep for a specific pet
+  static addSleepCoinsSpent(petId: string, coins: number): void {
+    const currentData = this.getPetData();
+    const currentSpent = currentData.sleepCoinsSpent[petId] || 0;
+    this.setPetData({
+      sleepCoinsSpent: {
+        ...currentData.sleepCoinsSpent,
+        [petId]: currentSpent + coins
+      }
+    });
+  }
+
   // Subscribe to pet data changes
   static onPetDataChanged(callback: (data: PetData) => void): () => void {
     const handler = (event: CustomEvent) => {
@@ -240,6 +267,8 @@ export function usePetData() {
     isPetOwned: (petId: string) => PetDataService.isPetOwned(petId),
     getPetCoinsSpent: (petId: string) => PetDataService.getPetCoinsSpent(petId),
     addPetCoinsSpent: (petId: string, coins: number) => PetDataService.addPetCoinsSpent(petId, coins),
+    getSleepCoinsSpent: (petId: string) => PetDataService.getSleepCoinsSpent(petId),
+    addSleepCoinsSpent: (petId: string, coins: number) => PetDataService.addSleepCoinsSpent(petId, coins),
     resetPetData: () => PetDataService.resetPetData()
   };
 }
