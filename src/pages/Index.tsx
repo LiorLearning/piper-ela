@@ -41,6 +41,7 @@ import TopicSelection from "./TopicSelection";
   } from "@/lib/utils";
 
 import { cacheAdventureImageHybrid, getCachedImagesForAdventureFirebase } from "@/lib/firebase-image-cache";
+import { useFirebaseImage, useCurrentAdventureId } from "@/hooks/use-firebase-image";
 
 import { testFirebaseStorage } from "@/lib/firebase-test";
 import { debugFirebaseAdventures, debugSaveTestAdventure, debugFirebaseConnection } from "@/lib/firebase-debug-adventures";
@@ -48,6 +49,7 @@ import { autoMigrateOnLogin, forceMigrateUserData } from "@/lib/firebase-data-mi
 
 import { getRandomSpellingQuestion, SpellingQuestion } from "@/lib/questionBankUtils";
 import FeedbackModal from "@/components/FeedbackModal";
+import { aiPromptSanitizer, SanitizedPromptResult } from "@/lib/ai-prompt-sanitizer";
 
 
 // Legacy user data interface for backwards compatibility
@@ -94,6 +96,46 @@ const SpeakerButton: React.FC<{ message: ChatMessage; index: number }> = ({ mess
   );
 };
 
+// Component for panel image figure with Firebase image resolution (Index.tsx version)
+const IndexPanelImageFigure: React.FC<{
+  panel: { id: string; image: string; text: string };
+  index: number;
+  oneLiner: string;
+}> = ({ panel, index, oneLiner }) => {
+  // Get current adventure ID for Firebase image resolution
+  const currentAdventureId = useCurrentAdventureId();
+  
+  // Resolve Firebase image if needed
+  const { url: resolvedImageUrl, isExpiredUrl } = useFirebaseImage(panel.image, currentAdventureId || undefined);
+  
+  React.useEffect(() => {
+    if (isExpiredUrl && resolvedImageUrl !== panel.image) {
+      console.log(`🔄 Index Panel ${index + 1}: Resolved expired image to Firebase URL: ${resolvedImageUrl.substring(0, 50)}...`);
+    }
+  }, [resolvedImageUrl, panel.image, index, isExpiredUrl]);
+
+  return (
+    <figure className="rounded-lg border-2 bg-card" style={{ borderColor: 'hsla(var(--primary), 0.9)' }}>
+      <img 
+        src={resolvedImageUrl} 
+        alt={`Panel ${index + 1}`} 
+        className="w-full h-auto object-cover border-2 rounded-t-lg" 
+        style={{ borderColor: 'hsla(var(--primary), 0.9)' }}
+        onError={(e) => {
+          const target = e.target as HTMLImageElement;
+          if (!target.src.includes('placeholder')) {
+            console.warn(`⚠️ Failed to load index panel image ${index + 1}, using fallback`);
+            target.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            target.style.minHeight = '200px';
+            target.alt = `Panel ${index + 1} (image unavailable)`;
+          }
+        }}
+      />
+      <figcaption className="px-2 py-1 text-sm font-semibold">{index + 1}. {oneLiner}</figcaption>
+    </figure>
+  );
+};
+
 // Component for handling async one-liner loading in the comic panel modal
 const PanelOneLinerFigure: React.FC<{
   panel: { id: string; image: string; text: string };
@@ -123,10 +165,7 @@ const PanelOneLinerFigure: React.FC<{
   }, [panel.text]);
 
   return (
-    <figure className="rounded-lg border-2 bg-card" style={{ borderColor: 'hsla(var(--primary), 0.9)' }}>
-      <img src={panel.image} alt={`Panel ${index + 1}`} className="w-full h-auto object-cover border-2 rounded-t-lg" style={{ borderColor: 'hsla(var(--primary), 0.9)' }} />
-      <figcaption className="px-2 py-1 text-sm font-semibold">{index + 1}. {oneLiner}</figcaption>
-    </figure>
+    <IndexPanelImageFigure panel={panel} index={index} oneLiner={oneLiner} />
   );
 };
 
@@ -214,6 +253,10 @@ const Index = () => {
   
   // Track ongoing image generation for cleanup
   const imageGenerationController = React.useRef<AbortController | null>(null);
+  
+  // AI Sanitized Prompt for legacy fallback
+  const [aiSanitizedPrompt, setAiSanitizedPrompt] = React.useState<SanitizedPromptResult | null>(null);
+  const [sanitizationInProgress, setSanitizationInProgress] = React.useState<boolean>(false);
   
   // Optional session tracking for Firebase (won't break existing functionality)
   const [currentSessionId, setCurrentSessionId] = React.useState<string | null>(null);
@@ -308,6 +351,17 @@ const Index = () => {
   // Feedback modal state
   const [showFeedbackModal, setShowFeedbackModal] = React.useState<boolean>(false);
   
+  // Helper function to build image context for AI sanitizer
+  const buildImageContext = useCallback(() => {
+    const recentMessages = chatMessages.slice(-4).map(msg => 
+      `${msg.type}: ${msg.content.substring(0, 100)}...`
+    ).join('; ');
+    
+    const userInfo = userData ? `Grade ${userData.grade}, Level ${userData.level}` : 'Elementary student';
+    
+    return `Context for ${userInfo}: Recent conversation: ${recentMessages}`;
+  }, [chatMessages, userData]);
+
   // Handle feedback submission
   const handleFeedbackSubmit = async (feedbackData: {enjoymentAnswer: string}) => {
     // Close modal immediately regardless of API success/failure
@@ -388,7 +442,10 @@ const Index = () => {
     if (currentScreen === -1 && imageGenerationController.current) {
       console.log('🏠 Navigating to home page - cleaning up image generation');
       imageGenerationController.current = null;
-      setIsGeneratingAdventureImage(false);
+      // Only reset loading state if unified system is not actively generating
+      if (!unifiedAIStreaming.isGeneratingImage) {
+        setIsGeneratingAdventureImage(false);
+      }
       setIsExplicitImageRequest(false);
     }
     
@@ -759,8 +816,29 @@ const Index = () => {
   // NEW: Unified AI streaming with automatic image generation
   const unifiedAIStreaming = useUnifiedAIStreaming({
     userId: user?.uid || 'anonymous',
+    adventureId: currentAdventureId || undefined,
     onNewImage: async (imageUrl: string, prompt: string) => {
       console.log('🎨 NEW: Image generated by unified AI system:', imageUrl);
+      
+      // 🎯 NEW: Reset counter to 0 when unified system generates image
+      setLastAutoImageMessageCount(prev => {
+        const currentUserCount = chatMessages.filter(msg => msg.type === 'user').length;
+        // Reset to 0, so auto-generation waits for full 4-message interval from now
+        const newCount = 0;
+        const nextAutoTriggerAt = currentUserCount + AUTO_IMAGE_TRIGGER_INTERVAL;
+        
+        console.log('📉 COMMUNICATION: Unified system generated image → resetting auto-generation counter:', {
+          previousAutoCount: prev,
+          currentUserMessageCount: currentUserCount,
+          newAutoCount: newCount,
+          nextAutoTriggerAt,
+          messagesUntilNextAuto: AUTO_IMAGE_TRIGGER_INTERVAL,
+          reason: 'unified_system_coordination',
+          message: `Auto-gen will now trigger after ${AUTO_IMAGE_TRIGGER_INTERVAL} more user messages`
+        });
+        
+        return newCount;
+      });
       
       // Cache the unified AI image to Firebase/localStorage
       try {
@@ -787,17 +865,34 @@ const Index = () => {
       console.log(`🎨 PANEL DEBUG: Adding new panel with image: ${imageUrl.substring(0, 60)}...`);
       addPanel(newPanel);
       
-      // Play completion sound (redundant but harmless - already handled in processor)
-      playImageCompleteSound();
+      // Completion sound is now handled by the unified streaming hook timeout
     },
     onResponseComplete: (response) => {
       console.log('✅ NEW: Unified AI response completed:', response);
     }
   });
   
+  // Track when legacy system is running independently to avoid sync conflicts
+  const [isLegacySystemRunning, setIsLegacySystemRunning] = React.useState(false);
+  
   // Sync legacy loading state with unified system for UI consistency
   React.useEffect(() => {
+    // 🛠️ CRITICAL FIX: Don't sync when legacy system is running independently
+    if (isLegacySystemRunning) {
+      console.log('🚫 SYNC BLOCKED: Legacy system is running independently, skipping sync');
+      return;
+    }
+    
+    console.log('🎯 🚨 CRITICAL SYNC: unifiedAIStreaming.isGeneratingImage changed from', isGeneratingAdventureImage, 'to', unifiedAIStreaming.isGeneratingImage);
     setIsGeneratingAdventureImage(unifiedAIStreaming.isGeneratingImage);
+  }, [unifiedAIStreaming.isGeneratingImage, isGeneratingAdventureImage, isLegacySystemRunning]);
+
+  // 🚨 CRITICAL SYNC: Monitor unified AI streaming state changes with detailed logging
+  React.useEffect(() => {
+    console.log('🚨 CRITICAL SYNC: unifiedAIStreaming.isGeneratingImage changed to:', unifiedAIStreaming.isGeneratingImage);
+    if (unifiedAIStreaming.isGeneratingImage) {
+      console.log('🎯 NEW MESSAGE: Current isGeneratingImage state: true');
+    }
   }, [unifiedAIStreaming.isGeneratingImage]);
 
   const generateAIResponse = useCallback(async (userText: string, messageHistory: ChatMessage[], spellingQuestion: SpellingQuestion | null): Promise<AdventureResponse> => {
@@ -843,6 +938,223 @@ const Index = () => {
     }
   }, [userData, currentSessionId]);
 
+  // Legacy image generation fallback when unified system fails
+  const handleLegacyImageFallback = useCallback(async (text: string, imageSubject?: string) => {
+    console.log('🔄 LEGACY FALLBACK: Starting legacy image generation for failed unified request');
+    
+    // Double-check with keyword detection - only proceed if this is truly an image request
+    const imageKeywords = ['create', 'make', 'generate', 'build', 'design', 'show me', 'what does', 'look like', 'i want to see', 'draw', 'picture', 'image'];
+    const lowerText = text.toLowerCase();
+    const hasImageKeywords = imageKeywords.some(keyword => lowerText.includes(keyword));
+    
+    if (!hasImageKeywords) {
+      console.log('🚫 LEGACY FALLBACK: No image keywords detected, skipping legacy generation');
+      return;
+    }
+    
+    console.log('✅ LEGACY FALLBACK: Image keywords detected, proceeding with legacy generation');
+    
+    // 🧹 START AI SANITIZATION WITH TIMEOUT
+    const originalPrompt = imageSubject || text;
+    console.log('🧹 LEGACY FALLBACK: Starting AI prompt sanitization for:', originalPrompt.substring(0, 50) + '...');
+    setSanitizationInProgress(true);
+    
+    // Extract adventure context for full sanitization
+    const adventureContext = chatMessages.slice(-5).map(msg => `${msg.type}: ${msg.content}`).join('; ');
+    
+    // Start sanitization but with timeout - WAIT for result before proceeding 
+    let sanitizationResult: any = null;
+    try {
+      console.log('🧹 LEGACY FALLBACK: Waiting for AI sanitization (max 8 seconds)...');
+      const startTime = Date.now();
+      
+      sanitizationResult = await Promise.race([
+        aiPromptSanitizer.sanitizePromptAndContext(originalPrompt, adventureContext),
+        new Promise<null>((_, reject) => setTimeout(() => reject(new Error('AI sanitization timeout')), 8000))
+      ]);
+      
+      const elapsed = Date.now() - startTime;
+      if (sanitizationResult) {
+        console.log(`✅ AI Full Sanitization completed in ${elapsed}ms:`, sanitizationResult.sanitizedPrompt?.substring(0, 80) + '...');
+        if (sanitizationResult.sanitizedContext) {
+          console.log('✅ Adventure context also sanitized:', sanitizationResult.sanitizedContext.substring(0, 80) + '...');
+        }
+        setAiSanitizedPrompt(sanitizationResult);
+      }
+    } catch (error: any) {
+      if (error.message === 'AI sanitization timeout') {
+        console.error('⏰ AI sanitization timed out after 8 seconds - proceeding with legacy only');
+      } else {
+        console.error('❌ AI Full Sanitization failed:', error.message);
+      }
+      setAiSanitizedPrompt(null);
+    } finally {
+      setSanitizationInProgress(false);
+    }
+    
+    try {
+      // 🛠️ CRITICAL FIX: Mark legacy system as running to prevent sync interference
+      setIsLegacySystemRunning(true);
+      
+      // Set loading state
+      setIsGeneratingAdventureImage(true);
+      
+      // Use the imageSubject or the original text for image generation
+      const imagePrompt = imageSubject || text;
+      
+      // Extract adventure context for caching
+      const adventureContext = chatMessages.slice(-5).map(msg => msg.content).join(" ");
+      
+      console.log('🎨 LEGACY FALLBACK: Calling legacy aiService.generateAdventureImage()');
+      
+      // Use the fresh sanitizationResult instead of state (which might be stale)
+      const finalSanitizedResult = sanitizationResult || aiSanitizedPrompt;
+      
+      // Debug sanitization state
+      console.log('🧹 LEGACY DEBUG: finalSanitizedResult state:', finalSanitizedResult ? 'PRESENT' : 'NULL');
+      if (finalSanitizedResult) {
+        console.log('🧹 LEGACY DEBUG: sanitizedPrompt preview:', finalSanitizedResult.sanitizedPrompt?.substring(0, 100) + '...');
+        console.log('🧹 LEGACY DEBUG: sanitizedContext preview:', finalSanitizedResult.sanitizedContext?.substring(0, 100) + '...');
+        console.log('🧹 LEGACY DEBUG: sanitization success:', finalSanitizedResult.success);
+      }
+      
+      const sanitizedResult = finalSanitizedResult ? {
+        sanitizedPrompt: finalSanitizedResult.sanitizedPrompt,
+        sanitizedContext: finalSanitizedResult.sanitizedContext
+      } : undefined;
+      
+      console.log('🧹 LEGACY DEBUG: Passing sanitizedResult to generateAdventureImage:', sanitizedResult ? 'PRESENT' : 'UNDEFINED');
+      
+      const generatedImageResult = await aiService.generateAdventureImage(
+        imagePrompt,
+        chatMessages,
+        "adventure scene",
+        sanitizedResult,
+        currentAdventureId || undefined
+      );
+      
+      if (generatedImageResult) {
+        // 🛡️ RACE CONDITION PREVENTION: Validate that this image is for the current adventure
+        if (generatedImageResult.adventureId && generatedImageResult.adventureId !== currentAdventureId) {
+          console.log(`🚫 IMAGE VALIDATION: Ignoring image from wrong adventure`, {
+            imageAdventureId: generatedImageResult.adventureId,
+            currentAdventureId: currentAdventureId,
+            reason: 'adventure_mismatch'
+          });
+          return;
+        }
+        
+        // Cache the generated adventure image
+        await cacheAdventureImageHybrid(
+          user?.uid || null,
+          generatedImageResult.imageUrl,
+          imagePrompt,
+          adventureContext,
+          currentAdventureId || undefined
+        );
+        
+        // Generate contextual response text
+        const contextualResponse = await aiService.generateAdventureImageResponse(
+          imagePrompt,
+          generatedImageResult.usedPrompt,
+          chatMessages
+        );
+        
+        // Create new panel with generated image
+        const newPanelId = crypto.randomUUID();
+        addPanel({ 
+          id: newPanelId, 
+          image: generatedImageResult.imageUrl, 
+          text: contextualResponse
+        });
+        setNewlyCreatedPanelId(newPanelId);
+        
+        // Completion sound will be handled by individual systems (not unified)
+        // For legacy fallback, this generates images immediately without loading delay
+        playImageCompleteSound();
+        
+        console.log('✅ LEGACY FALLBACK: Successfully generated image and added panel');
+        
+        // Add AI message to chat with proper side effects (TTS, sounds, etc.)
+        const userMessage: ChatMessage = {
+          type: 'user',
+          content: text,
+          timestamp: Date.now()
+        };
+        
+        const aiMessage: ChatMessage = {
+          type: 'ai',
+          content: `![Legacy Image](${generatedImageResult.imageUrl})\n\n${contextualResponse}`,
+          timestamp: Date.now()
+        };
+        
+        setChatMessages(prev => {
+          const updatedMessages = [...prev, userMessage, aiMessage];
+          
+          // Trigger all the same side effects as regular AI messages
+          setLastMessageCount(updatedMessages.length);
+          playMessageSound();
+          
+          // Auto-speak the AI message (TTS)
+          const messageId = `index-chat-${aiMessage.timestamp}-${prev.length + 1}`;
+          ttsService.speakAIMessage(aiMessage.content, messageId).catch(error => 
+            console.error('TTS error for legacy AI message:', error)
+          );
+          
+          console.log('🔊 LEGACY FALLBACK: Triggered TTS for AI message');
+          
+          // Optional: Save AI message to Firebase session
+          if (currentSessionId) {
+            adventureSessionService.addChatMessage(currentSessionId, userMessage);
+            adventureSessionService.addChatMessage(currentSessionId, aiMessage);
+            
+            // Check if we should generate a chat summary
+            handleSummaryGeneration(currentSessionId, updatedMessages);
+          }
+          
+          return updatedMessages;
+        });
+        
+      } else {
+        console.log('⚠️ LEGACY FALLBACK: Image generation failed, using fallback image');
+        
+        // Use fallback image
+        const fallbackImage = images[Math.floor(Math.random() * images.length)];
+        const newPanelId = crypto.randomUUID();
+        
+        addPanel({ 
+          id: newPanelId, 
+          image: fallbackImage, 
+          text: "Your adventure continues with new mysteries..."
+        });
+        setNewlyCreatedPanelId(newPanelId);
+      }
+      
+    } catch (error) {
+      console.error('❌ LEGACY FALLBACK: Error in legacy image generation:', error);
+      
+      // Final fallback to random image
+      const fallbackImage = images[Math.floor(Math.random() * images.length)];
+      const newPanelId = crypto.randomUUID();
+      
+      addPanel({ 
+        id: newPanelId, 
+        image: fallbackImage, 
+        text: "New adventure continues..."
+      });
+      setNewlyCreatedPanelId(newPanelId);
+      
+    } finally {
+      // 🛠️ CRITICAL FIX: Always stop loading state in legacy fallback
+      // The unified system has already failed, so we need to clear the loading state
+      console.log('🔄 LEGACY FALLBACK: Clearing loading state in finally block');
+      setIsGeneratingAdventureImage(false);
+      
+      // 🛠️ CRITICAL FIX: Mark legacy system as no longer running to re-enable sync
+      setIsLegacySystemRunning(false);
+    }
+  }, [chatMessages, aiService, user?.uid, currentAdventureId, addPanel, images, playImageCompleteSound, setIsLegacySystemRunning]);
+
 
 
   // Generate new image panel based on context
@@ -859,17 +1171,22 @@ const Index = () => {
       // Use the prompt or generate from recent context
       const imagePrompt = prompt || 
           chatMessages.slice(-3).map(msg => msg.content).join(" ") || 
-          "space adventure with rocket";
+          "adventure with rocket";
         
         // Extract adventure context for caching
         const adventureContext = chatMessages.slice(-5).map(msg => msg.content).join(" ");
         
-        // Generate adventure image using AI service with user_adventure context
-        const generatedImageResult = await aiService.generateAdventureImage(
-          imagePrompt,
-          chatMessages,
-          "space adventure scene"
-        );
+        // 🚫 DISABLED: Legacy image generation to prevent duplicates with unified system
+        console.log('🚫 [Index.onGenerateImage()] Skipping legacy manual image generation - unified system handles this now');
+        console.log('📝 [Index.onGenerateImage()] Requested prompt:', imagePrompt);
+        const generatedImageResult = null;
+        
+        // ORIGINAL CODE (DISABLED):
+        // const generatedImageResult = await aiService.generateAdventureImage(
+        //   imagePrompt,
+        //   chatMessages,
+        //   "space adventure scene"
+        // );
         
         let image: string;
         let panelText: string;
@@ -910,11 +1227,12 @@ const Index = () => {
       });
       setNewlyCreatedPanelId(newPanelId);
       
-      // Stop loading sound and play completion sound when image is ready
+      // Stop loading sound - completion sound handled by unified system timeout
       stopImageLoadingSound();
-      playImageCompleteSound();
+      // playImageCompleteSound(); // Removed - now handled by unified streaming hook
       // Stop loading animation only for automatic generation, not explicit requests
-      if (!isExplicitImageRequest) {
+      // Also check that unified system is not actively generating
+      if (!isExplicitImageRequest && !unifiedAIStreaming.isGeneratingImage) {
         setIsGeneratingAdventureImage(false);
       }
       
@@ -937,7 +1255,8 @@ const Index = () => {
       // Stop loading sound on error
       stopImageLoadingSound();
       // Stop loading animation only for automatic generation, not explicit requests
-      if (!isExplicitImageRequest) {
+      // Also check that unified system is not actively generating
+      if (!isExplicitImageRequest && !unifiedAIStreaming.isGeneratingImage) {
         setIsGeneratingAdventureImage(false);
       }
       
@@ -1099,9 +1418,12 @@ const Index = () => {
                   setLastMessageCount(newMessages.length);
                   playMessageSound();
                   
-                  // Auto-speak the AI message
+                  // Auto-speak the AI message - delay for image responses to wait for loading to complete
                   const messageId = `index-chat-${aiMessage.timestamp}-${newMessages.length - 1}`;
-                  ttsService.speakAIMessage(aiMessage.content, messageId);
+                  // For image responses, delay TTS until after the 10-second loading period
+                  setTimeout(() => {
+                    ttsService.speakAIMessage(aiMessage.content, messageId);
+                  }, 5000); // Match the delay timeout in unified streaming hook
                   
                   return newMessages;
                 } else {
@@ -1109,9 +1431,12 @@ const Index = () => {
                   setLastMessageCount(prev.length + 2);
                   playMessageSound();
                   
-                  // Auto-speak the AI message
+                  // Auto-speak the AI message - delay for image responses to wait for loading to complete
                   const messageId = `index-chat-${aiMessage.timestamp}-${prev.length + 1}`;
-                  ttsService.speakAIMessage(aiMessage.content, messageId);
+                  // For image responses, delay TTS until after the 10-second loading period
+                  setTimeout(() => {
+                    ttsService.speakAIMessage(aiMessage.content, messageId);
+                  }, 5000); // Match the delay timeout in unified streaming hook
                   
                   return [...prev, userMessage, aiMessage];
                 }
@@ -1123,12 +1448,20 @@ const Index = () => {
               // Note: Images are automatically handled by the onNewImage callback
               return; // Exit early - unified system handled image request WITH images
             } else {
-              // Unified system returned text but NO IMAGES for an image request - fall through to legacy
+              // Unified system returned text but NO IMAGES for an image request - fall back to legacy
               console.log('⚠️ Unified system returned text-only response for image request - falling back to legacy image generation');
+              
+              // Call legacy image generation with keyword detection
+              await handleLegacyImageFallback(text);
+              return; // Exit after legacy fallback
             }
           } else {
-            // Unified system returned null - fall through to legacy image generation
+            // Unified system returned null - fall back to legacy image generation
             console.log('⚠️ Unified system returned null for image request - falling back to legacy image generation');
+            
+            // Call legacy image generation with keyword detection
+            await handleLegacyImageFallback(text);
+            return; // Exit after legacy fallback
           }
           
         } catch (unifiedError) {
@@ -1139,7 +1472,10 @@ const Index = () => {
           }
           
           console.error('❌ Unified system failed for image request, falling back to legacy:', unifiedError);
-          // Fall through to legacy system below
+          
+          // Call legacy image generation with keyword detection
+          await handleLegacyImageFallback(text);
+          return; // Exit after legacy fallback
         }
       }
       
@@ -1283,12 +1619,16 @@ const Index = () => {
             return [...prev, generatingMessage];
           });
           
-          // Generate image and get contextual response
-          const generatedImageResult = await aiService.generateAdventureImage(
-            imageSubject || text,
-            chatMessages,
-            "space adventure scene"
-          );
+          // 🚫 DISABLED: Legacy user-based image generation to prevent duplicates with unified system
+          console.log('🚫 Skipping legacy user-based image generation - unified system handles this now');
+          const generatedImageResult = null;
+          
+          // ORIGINAL CODE (DISABLED):
+          // const generatedImageResult = await aiService.generateAdventureImage(
+          //   imageSubject || text,
+          //   chatMessages,
+          //   "space adventure scene"
+          // );
           
           let imageAIResponse: string;
           
@@ -1323,7 +1663,10 @@ const Index = () => {
             setLastMessageCount(prev.length + 1);
             playMessageSound();
             // Stop loading animation and reset explicit request flag
-            setIsGeneratingAdventureImage(false);
+            // Only stop if unified system is not actively generating
+            if (!unifiedAIStreaming.isGeneratingImage) {
+              setIsGeneratingAdventureImage(false);
+            }
             setIsExplicitImageRequest(false);
             // Auto-speak the AI message
             const messageId = `index-chat-${aiMessage.timestamp}-${prev.length}`;
@@ -1339,7 +1682,10 @@ const Index = () => {
         } catch (error) {
           console.error('Error in image request handling:', error);
           // Stop loading animation and sound on error, reset explicit request flag
-          setIsGeneratingAdventureImage(false);
+          // Only stop if unified system is not actively generating
+          if (!unifiedAIStreaming.isGeneratingImage) {
+            setIsGeneratingAdventureImage(false);
+          }
           setIsExplicitImageRequest(false);
           stopImageLoadingSound();
           
@@ -2122,42 +2468,119 @@ const Index = () => {
   const [lastAutoImageMessageCount, setLastAutoImageMessageCount] = useState(0);
   const AUTO_IMAGE_TRIGGER_INTERVAL = 4; // Generate image every 4 user messages
   
-  console.log(`🔥 AUTO IMAGE SYSTEM STATUS:`, {
-    isAutoImageGenerationActive,
-    lastAutoImageMessageCount, 
-    AUTO_IMAGE_TRIGGER_INTERVAL,
-    currentUserMessageCount: chatMessages.filter(msg => msg.type === 'user').length,
-    currentAdventureId,
-    currentScreen,
-    isInAdventureMode: currentScreen === 1,
-    timestamp: Date.now()
-  });
+  
 
-  // Reset auto image counter when adventure changes
+  // Reset auto image counter when adventure changes - smart reset based on adventure mode
   React.useEffect(() => {
-    console.log(`🔄 ADVENTURE CHANGE DETECTED - Resetting auto image counter`);
+    console.log(`🔄 ADVENTURE CHANGE DETECTED - Smart counter reset`);
     console.log(`🔄 Previous lastAutoImageMessageCount:`, lastAutoImageMessageCount);
     console.log(`🔄 New currentAdventureId:`, currentAdventureId);
-    setLastAutoImageMessageCount(0);
-  }, [currentAdventureId]); // Reset when adventure ID changes
+    console.log(`🔄 Adventure mode:`, adventureMode);
+    
+    // Smart reset: only reset to 0 for new adventures, for loaded adventures set to current user message count
+    const currentUserMessageCount = chatMessages.filter(msg => msg.type === 'user').length;
+    
+    // 🧹 CLEANUP: Clear any ongoing image generation from previous adventure
+    if (imageGenerationController.current) {
+      console.log('🔄 ADVENTURE SWITCH CLEANUP: Clearing previous image generation');
+      imageGenerationController.current = null;
+    }
+    // Reset image generation state unless unified system is active
+    if (!unifiedAIStreaming.isGeneratingImage) {
+      setIsGeneratingAdventureImage(false);
+    }
+    setIsExplicitImageRequest(false);
+    
+    if (adventureMode === 'new') {
+      console.log(`🔄 NEW ADVENTURE: Setting counter to current user message count (${currentUserMessageCount}) to prevent immediate auto-generation`);
+      setLastAutoImageMessageCount(currentUserMessageCount);
+    } else if (adventureMode === 'continue') {
+      console.log(`🔄 LOADED ADVENTURE: Setting counter to current user message count (${currentUserMessageCount}) to prevent immediate auto-generation`);
+      setLastAutoImageMessageCount(currentUserMessageCount);
+    } else {
+      // Fallback to current behavior for undefined modes
+      console.log(`🔄 UNKNOWN MODE: Using fallback reset to 0`);
+      setLastAutoImageMessageCount(0);
+    }
+  }, [currentAdventureId, adventureMode]); // Reset when adventure ID or mode changes
+
+
+   // Get recent AI messages for auto image generation
+   const getRecentAIMessages = useCallback(() => {
+    const aiMessages = chatMessages
+      .filter(msg => msg.type === 'ai')
+      .slice(-5)
+      .map(msg => msg.content.substring(0, 150))
+      .join(' | ');
+    return aiMessages;
+  }, [chatMessages]);
 
   // Additional reset when chat is cleared or screen changes (safety net)
   React.useEffect(() => {
     const userMessageCount = chatMessages.filter(msg => msg.type === 'user').length;
     
     // If we have very few messages but high counter, something went wrong - reset
-    if (userMessageCount < 3 && lastAutoImageMessageCount > 0) {
-      console.log(`🔄 SAFETY RESET - Chat cleared or new adventure started`);
+    // Also reset if counter is higher than total user messages (stale state)
+    if ((userMessageCount < 3 && lastAutoImageMessageCount > 0) || 
+        (lastAutoImageMessageCount > userMessageCount)) {
+      console.log(`🔄 SAFETY RESET - ${lastAutoImageMessageCount > userMessageCount ? 'Stale counter detected' : 'Chat cleared or new adventure started'}`);
       console.log(`🔄 userMessageCount: ${userMessageCount}, lastAutoImageMessageCount: ${lastAutoImageMessageCount}`);
       setLastAutoImageMessageCount(0);
     }
   }, [chatMessages.length, currentScreen]); // Reset when messages or screen change
 
+ 
+
   // Auto image generation function using adventure summary + last 3 messages
   const generateAutoImage = useCallback(async () => {
     try {
-      console.log(`🎨 AUTO IMAGE: === STARTING GENERATION PROCESS ===`);
-      console.log(`🎨 AUTO IMAGE: Function called at:`, new Date().toISOString());
+      console.log(`🎨 [generateAutoImage()] === STARTING GENERATION PROCESS ===`);
+      console.log(`🎨 [generateAutoImage()] Function called at:`, new Date().toISOString());
+      
+      // 🔍 CRITICAL: Add stack trace to see where this is being called from
+      console.log(`🔍 [generateAutoImage()] CALL STACK:`, new Error().stack?.split('\n').slice(1, 4).join('\n'));
+      
+      // 🛡️ ABSOLUTE OVERRIDE: Block ALL auto generation if unified/legacy system has recent activity
+      const hasRecentUnifiedActivity = unifiedAIStreaming.lastResponse && 
+        (Date.now() - unifiedAIStreaming.lastResponse.timestamp < 10000); // 10 seconds
+      
+      const hasRecentLegacyImage = chatMessages.some(msg => 
+        msg.type === 'ai' && 
+        msg.content?.includes('![Legacy Image]') &&
+        (Date.now() - (msg.timestamp || 0)) < 5000 // Within last 5 seconds
+      );
+      
+      console.log(`🔍 [generateAutoImage()] ABSOLUTE COORDINATION CHECK:`, {
+        isUnifiedSessionActive: unifiedAIStreaming.isUnifiedSessionActive,
+        isStreaming: unifiedAIStreaming.isStreaming,
+        isGeneratingImage: unifiedAIStreaming.isGeneratingImage,
+        hasRecentUnifiedActivity: hasRecentUnifiedActivity,
+        hasRecentLegacyImage: hasRecentLegacyImage,
+        lastResponseTimestamp: unifiedAIStreaming.lastResponse?.timestamp,
+        timeSinceLastResponse: unifiedAIStreaming.lastResponse ? Date.now() - unifiedAIStreaming.lastResponse.timestamp : 'N/A',
+        currentAdventureId: currentAdventureId,
+        chatMessagesLength: chatMessages.length
+      });
+      
+      // 🚫 ABSOLUTE BLOCK: If unified system is active OR legacy system recently ran, don't generate
+      if (unifiedAIStreaming.isUnifiedSessionActive || 
+          unifiedAIStreaming.isStreaming || 
+          unifiedAIStreaming.isGeneratingImage || 
+          hasRecentUnifiedActivity ||
+          hasRecentLegacyImage) {
+        console.log(`🚫 [generateAutoImage()] ABSOLUTE BLOCK - Unified/Legacy system active or recent activity detected`);
+        console.log(`🚫 [generateAutoImage()] Blocking reason:`, {
+          isUnifiedSessionActive: unifiedAIStreaming.isUnifiedSessionActive,
+          isStreaming: unifiedAIStreaming.isStreaming,
+          isGeneratingImage: unifiedAIStreaming.isGeneratingImage,
+          hasRecentUnifiedActivity: hasRecentUnifiedActivity,
+          hasRecentLegacyImage: hasRecentLegacyImage,
+          blockingSystem: hasRecentLegacyImage ? 'legacy' : 'unified'
+        });
+        return; // Exit without generating
+      }
+      
+      console.log(`✅ [generateAutoImage()] ABSOLUTE COORDINATION PASSED - Safe to proceed with generation`);
       
       // Get current adventure summary from session
       let adventureSummary = '';
@@ -2182,21 +2605,25 @@ const Index = () => {
         console.log(`❌ AUTO IMAGE: No currentSessionId available`);
       }
       
-      // Get last 3 user messages for recent context
+      // Get last 30 user messages for recent context
       const userMessages = chatMessages.filter(msg => msg.type === 'user');
-      const lastThreeMessages = userMessages.slice(-3).map(msg => msg.content).join(' ');
+      const lastThirtyMessages = userMessages.slice(-30).map(msg => msg.content).join(' ');
+      
+      // Get recent AI messages
+      const recentAIMessages = getRecentAIMessages();
       
       console.log(`🎨 AUTO IMAGE: Message analysis:`, {
         totalChatMessages: chatMessages.length,
         totalUserMessages: userMessages.length,
-        lastThreeUserMessages: userMessages.slice(-3).map(msg => msg.content),
-        combinedLastThree: lastThreeMessages
+        lastThirtyUserMessages: userMessages.slice(-30).map(msg => msg.content),
+        combinedLastThirty: lastThirtyMessages,
+        recentAIMessages: recentAIMessages.substring(0, 100) + '...'
       });
       
-      // Create enhanced prompt combining both contexts
+      // Create enhanced prompt combining all contexts
       const combinedContext = adventureSummary 
-        ? `Adventure so far: ${adventureSummary}. Recent events: ${lastThreeMessages}`
-        : `Recent adventure events: ${lastThreeMessages}`;
+        ? `Adventure so far: ${adventureSummary}. Recent user events: ${lastThirtyMessages}. Recent AI responses: ${recentAIMessages}`
+        : `Recent user events: ${lastThirtyMessages}. Recent AI responses: ${recentAIMessages}`;
       
       console.log(`🎨 AUTO IMAGE: Final combined context:`, {
         length: combinedContext.length,
@@ -2205,7 +2632,19 @@ const Index = () => {
         fullContext: combinedContext
       });
       
-      // Generate adventure image using AI service with combined context
+      // 🎯 NEW: Final check before generation - unified system might have become active
+      if (unifiedAIStreaming.isUnifiedSessionActive) {
+        console.log('🚫 AUTO IMAGE: CANCELLED - Unified session became active during setup, aborting automatic generation');
+        console.log('🔍 AUTO IMAGE COORDINATION: Session state at cancellation:', {
+          isUnifiedSessionActive: unifiedAIStreaming.isUnifiedSessionActive,
+          isStreaming: unifiedAIStreaming.isStreaming,
+          isGeneratingImage: unifiedAIStreaming.isGeneratingImage,
+          reason: 'unified_session_took_priority_during_setup'
+        });
+        return;
+      }
+      
+      // Re-enabled legacy auto image generation since unified system is not integrated yet
       console.log(`🎨 AUTO IMAGE: Calling aiService.generateAdventureImage()...`);
       console.log(`🎨 AUTO IMAGE: Parameters:`, {
         prompt: combinedContext,
@@ -2216,7 +2655,9 @@ const Index = () => {
       const generatedImageResult = await aiService.generateAdventureImage(
         combinedContext,
         chatMessages,
-        "adventure scene"
+        "adventure scene",
+        undefined,
+        currentAdventureId || undefined
       );
       
       console.log(`🎨 AUTO IMAGE: Generation result:`, {
@@ -2227,6 +2668,16 @@ const Index = () => {
       
       if (!generatedImageResult) {
         console.log('❌ AUTO IMAGE: Generation failed, skipping this cycle');
+        return;
+      }
+      
+      // 🛡️ RACE CONDITION PREVENTION: Validate that this image is for the current adventure
+      if (generatedImageResult.adventureId && generatedImageResult.adventureId !== currentAdventureId) {
+        console.log(`🚫 AUTO IMAGE VALIDATION: Ignoring image from wrong adventure`, {
+          imageAdventureId: generatedImageResult.adventureId,
+          currentAdventureId: currentAdventureId,
+          reason: 'adventure_mismatch'
+        });
         return;
       }
       
@@ -2273,6 +2724,31 @@ const Index = () => {
       } catch (responseError) {
         console.warn('⚠️ Failed to generate contextual response, using fallback:', responseError);
         panelText = "A new scene unfolds in your adventure...";
+      }
+      
+      // 🎯 ENHANCED: Final check before displaying - unified/legacy systems take priority
+      const hasLegacyImageInChat = chatMessages.some(msg => 
+        msg.type === 'ai' && 
+        msg.content?.includes('![Legacy Image]') &&
+        (Date.now() - (msg.timestamp || 0)) < 5000 // Within last 30 seconds
+      );
+
+      if (unifiedAIStreaming.isGeneratingImage || unifiedAIStreaming.isUnifiedSessionActive || hasLegacyImageInChat) {
+        console.log('🚫 AUTO IMAGE: RESULT DISCARDED - Unified/Legacy system has priority, discarding automatic image');
+        console.log('🔍 AUTO IMAGE COORDINATION: Session state at discard:', {
+          isUnifiedSessionActive: unifiedAIStreaming.isUnifiedSessionActive,
+          isStreaming: unifiedAIStreaming.isStreaming,
+          isGeneratingImage: unifiedAIStreaming.isGeneratingImage,
+          hasLegacyImageInChat: hasLegacyImageInChat,
+          generatedImageUrl: image.substring(0, 50) + '...',
+          reason: hasLegacyImageInChat ? 'legacy_system_priority_discard' : 'unified_system_priority_discard'
+        });
+        
+        // 🧹 CRITICAL: Clear loading states when discarding to prevent infinite loading
+        setIsGeneratingAdventureImage(false);
+        console.log('🧹 AUTO IMAGE: Cleared loading states after discard');
+        
+        return; // Discard the result completely - unified/legacy system has priority
       }
       
       const newPanelId = crypto.randomUUID();
@@ -2341,7 +2817,7 @@ const Index = () => {
         }, 600);
       }, 2000);
     }
-  }, [addPanel, images, chatMessages, currentSessionId, currentAdventureId, user?.uid]);
+  }, [addPanel, images, chatMessages, currentSessionId, currentAdventureId, user?.uid, unifiedAIStreaming]);
 
   // DISABLED: Helper functions for old automatic image generation system
   // const detectSceneChange = useCallback((messages: ChatMessage[]) => {
@@ -2427,33 +2903,91 @@ const Index = () => {
       return;
     }
     
-    // Check if enough user messages have passed since last auto image
-    const messagesSinceLastAuto = currentMessageCount - lastAutoImageMessageCount;
-    const shouldGenerate = messagesSinceLastAuto >= AUTO_IMAGE_TRIGGER_INTERVAL;
+    // 🎯 IMPROVED LOGIC: Only generate when message count is exactly divisible by interval
+    // and we haven't already generated for this count (prevents duplicate triggers)
+    const isExactInterval = currentMessageCount > 0 && currentMessageCount % AUTO_IMAGE_TRIGGER_INTERVAL === 0;
+    const notAlreadyGenerated = lastAutoImageMessageCount !== currentMessageCount;
     
-    console.log(`🎨 AUTO IMAGE CALCULATION:`, {
+    // 🚫 CLASH DETECTION: Check if unified system was called for the current message cycle
+    // Get the latest user message (the one that would trigger auto generation)
+    const filteredUserMessages = chatMessages.filter(msg => msg.type === 'user');
+    const latestUserMessage = filteredUserMessages[filteredUserMessages.length - 1];
+    
+    // Check if there's an AI response to this latest user message that contains an image
+    // This includes both unified system success AND legacy fallback success
+    const unifiedCalledForCurrentMessage = latestUserMessage && chatMessages.some(msg => 
+      msg.type === 'ai' && 
+      msg.timestamp && latestUserMessage.timestamp &&
+      msg.timestamp > latestUserMessage.timestamp && // AI message came after user message
+      (msg.content?.includes('![Generated Image]') || // Unified system success
+       msg.content?.includes('![Legacy Image]')) // Legacy fallback success
+    );
+    
+    const shouldGenerate = isExactInterval && notAlreadyGenerated && !unifiedCalledForCurrentMessage;
+
+    const messagesSinceLastAuto = currentMessageCount - lastAutoImageMessageCount;
+    
+    console.log(`🎨 AUTO IMAGE CALCULATION (IMPROVED):`, {
       currentMessageCount,
       lastAutoImageMessageCount,
       messagesSinceLastAuto,
       AUTO_IMAGE_TRIGGER_INTERVAL,
-      shouldGenerate
+      isExactInterval,
+      notAlreadyGenerated,
+      unifiedCalledForCurrentMessage,
+      latestUserMessageId: latestUserMessage?.timestamp,
+      shouldGenerate,
+      explanation: shouldGenerate ? 'EXACT_INTERVAL_MATCH' : unifiedCalledForCurrentMessage ? 'SKIPPED_DUE_TO_UNIFIED_CLASH' : 'NOT_INTERVAL_OR_ALREADY_GENERATED'
     });
     
+    // 🛡️ LAYER 1 COORDINATION: Check if unified session is active before scheduling
+    console.log('🔍 [AUTO IMAGE COORDINATION] LAYER 1 - Checking unified system state before scheduling:', {
+      isUnifiedSessionActive: unifiedAIStreaming.isUnifiedSessionActive,
+      isStreaming: unifiedAIStreaming.isStreaming,
+      isGeneratingImage: unifiedAIStreaming.isGeneratingImage,
+      shouldGenerate: shouldGenerate,
+      currentSessionId: unifiedAIStreaming.sessionId
+    });
+    
+    if (unifiedAIStreaming.isUnifiedSessionActive) {
+      console.log('🚫 [AUTO IMAGE COORDINATION] LAYER 1 BLOCKED - Unified session is active, skipping scheduling');
+      console.log('🔍 [AUTO IMAGE COORDINATION] LAYER 1 - Unified session state:', {
+        isUnifiedSessionActive: unifiedAIStreaming.isUnifiedSessionActive,
+        isStreaming: unifiedAIStreaming.isStreaming,
+        isGeneratingImage: unifiedAIStreaming.isGeneratingImage,
+        reason: 'unified_system_priority'
+      });
+      return; // Exit early - don't schedule generation
+    }
+    
+    if (unifiedAIStreaming.isStreaming || unifiedAIStreaming.isGeneratingImage) {
+      console.log('🚫 [AUTO IMAGE COORDINATION] LAYER 1 BLOCKED - Unified system is busy, skipping scheduling');
+      return; // Exit early - don't schedule generation
+    }
+    
     if (shouldGenerate) {
-      console.log(`✅ AUTO IMAGE: TRIGGERING! After ${messagesSinceLastAuto} user messages (threshold: ${AUTO_IMAGE_TRIGGER_INTERVAL})`);
-      console.log(`🎨 AUTO IMAGE: Setting lastAutoImageMessageCount from ${lastAutoImageMessageCount} to ${currentMessageCount}`);
+      console.log(`✅ [AUTO IMAGE COORDINATION] LAYER 1 PASSED - Scheduling generation for message count ${currentMessageCount}`);
+      console.log(`🎨 [AUTO IMAGE COORDINATION] Setting lastAutoImageMessageCount from ${lastAutoImageMessageCount} to ${currentMessageCount}`);
       
-      // Update the counter first to prevent duplicate triggers
+      // Update the counter IMMEDIATELY to prevent duplicate triggers
       setLastAutoImageMessageCount(currentMessageCount);
       
-      // Small delay to ensure message rendering is complete
+      // Small delay to ensure message rendering is complete, then run Layer 2 check
       setTimeout(() => {
-        console.log(`🎨 AUTO IMAGE: Calling generateAutoImage() now...`);
+        console.log(`🎨 [AUTO IMAGE COORDINATION] 1-second delay complete, executing generateAutoImage() with Layer 2 check...`);
         generateAutoImage();
       }, 1000);
     } else {
-      const remaining = AUTO_IMAGE_TRIGGER_INTERVAL - messagesSinceLastAuto;
-      console.log(`⏳ AUTO IMAGE: Waiting for ${remaining} more user messages (${messagesSinceLastAuto}/${AUTO_IMAGE_TRIGGER_INTERVAL})`);
+      if (unifiedCalledForCurrentMessage && isExactInterval) {
+        // Skip this cycle due to clash, wait for next cycle
+        const nextTrigger = currentMessageCount + AUTO_IMAGE_TRIGGER_INTERVAL;
+        console.log(`🚫 AUTO IMAGE: UNIFIED CLASH DETECTED - Skipping cycle ${currentMessageCount}, will generate at message ${nextTrigger} instead`);
+        console.log(`🔍 AUTO IMAGE: Unified system already generated image for message ${currentMessageCount}, avoiding duplicate generation`);
+      } else {
+        const nextTrigger = Math.ceil(currentMessageCount / AUTO_IMAGE_TRIGGER_INTERVAL) * AUTO_IMAGE_TRIGGER_INTERVAL;
+        const remaining = nextTrigger - currentMessageCount;
+        console.log(`⏳ AUTO IMAGE: Waiting for next interval. Current: ${currentMessageCount}, Next trigger: ${nextTrigger}, Remaining: ${remaining} messages`);
+      }
     }
   }, [
     chatMessages.filter(msg => msg.type === 'user').length, 
@@ -2461,7 +2995,8 @@ const Index = () => {
     isAutoImageGenerationActive, 
     lastAutoImageMessageCount, 
     generateAutoImage,
-    currentScreen
+    currentScreen,
+    unifiedAIStreaming.isUnifiedSessionActive // NEW: Re-check when unified session state changes
   ]);
 
   // SpellBox event handlers

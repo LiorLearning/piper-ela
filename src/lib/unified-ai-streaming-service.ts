@@ -22,6 +22,7 @@ export interface UnifiedAIResponse {
   textContent: string;
   imageUrls: string[];
   streamEvents: StreamEvent[];
+  timestamp: number; // When the response was completed
 }
 
 /**
@@ -98,7 +99,8 @@ export class UnifiedAIStreamingService {
     chatHistory: ChatMessage[],
     spellingQuestion: SpellingQuestion,
     userId: string,
-    sessionId: string
+    sessionId: string,
+    adventureId?: string
   ): Promise<UnifiedAIResponse> {
     
     if (!this.isInitialized || !this.client) {
@@ -120,7 +122,15 @@ export class UnifiedAIStreamingService {
     console.log(`🎯 Created new AbortController for session: ${sessionId}`);
     
     try {
-      console.log('🚀 Generating unified AI response with potential images...');
+      console.log('🚀 [UnifiedAIStreamingService.generateUnifiedResponse()] Generating unified AI response with potential images...');
+      console.log('📝 [UnifiedAIStreamingService.generateUnifiedResponse()] User message:', userMessage);
+      console.log('👤 [UnifiedAIStreamingService.generateUnifiedResponse()] User ID:', userId);
+      console.log('🎯 [UnifiedAIStreamingService.generateUnifiedResponse()] Session ID:', sessionId);
+      console.log('🎨 [UnifiedAIStreamingService.generateUnifiedResponse()] Adventure ID:', adventureId);
+      
+      // 🎯 NEW: Signal automatic generation cancellation at start of unified session
+      const { aiService } = await import('./ai-service');
+      aiService.unifiedSystemTakingOver();
       
       // Get AI response using enhanced prompt that includes image generation instructions
       const aiResponse = await this.getEnhancedAIResponse(
@@ -138,7 +148,7 @@ export class UnifiedAIStreamingService {
       // Pass user message for fallback visual detection, not AI response content
       const hasImages = ResponseProcessor.containsImageRequests(aiResponse, userMessage);
       
-      console.log('🔍 Image generation analysis:', {
+      console.log('🔍 [UnifiedAIStreamingService.generateUnifiedResponse()] Image generation analysis:', {
         userMessage: userMessage,
         responsePreview: aiResponse.substring(0, 200) + '...',
         hasExplicitTags: aiResponse.includes('<generateImage>'),
@@ -150,18 +160,16 @@ export class UnifiedAIStreamingService {
       });
       
       if (!hasImages) {
-        // Simple text-only response
-        console.log('📝 AI response contains text only - no images will be generated');
-        return {
-          hasImages: false,
-          textContent: aiResponse,
-          imageUrls: [],
-          streamEvents: [{
-            type: 'text',
-            content: aiResponse,
-            timestamp: Date.now()
-          }]
-        };
+        // Fallback to legacy system instead of text-only response
+        console.log('📝 Unified system detected no image requests - falling back to legacy system...');
+        return await this.callLegacySystemAsFallback(
+          userMessage, 
+          chatHistory, 
+          spellingQuestion, 
+          userId, 
+          aiResponse,
+          adventureId
+        );
       }
       
       // Process response with image generation
@@ -213,13 +221,19 @@ export class UnifiedAIStreamingService {
         callback(completionEvent);
       }
       
-      console.log(`✅ Unified response generated with ${imageUrls.length} images`);
+      const completionTimestamp = Date.now();
+      console.log(`✅ [UnifiedAIStreamingService.generateUnifiedResponse()] Unified response generated with ${imageUrls.length} images`);
+      console.log(`⏰ [UnifiedAIStreamingService.generateUnifiedResponse()] Completion timestamp: ${completionTimestamp}`);
+      if (imageUrls.length > 0) {
+        console.log(`🖼️ [UnifiedAIStreamingService.generateUnifiedResponse()] Generated image URLs:`, imageUrls);
+      }
       
       return {
         hasImages: true,
         textContent,
         imageUrls,
-        streamEvents
+        streamEvents,
+        timestamp: completionTimestamp
       };
       
     } catch (error) {
@@ -280,9 +294,29 @@ export class UnifiedAIStreamingService {
     // Enhanced system prompt that includes image generation instructions
     const systemPrompt = `Role & Perspective: Be my loyal sidekick in an imaginative adventure for children aged 8–14. Speak in the first person as my companion.
 
-🎨 IMAGE GENERATION RULES - RESPOND TO CLEAR IMAGE REQUESTS:
+🎨 CRITICAL IMAGE GENERATION RULES - MANDATORY COMPLIANCE:
 - Use <generateImage>detailed prompt</generateImage> when the user makes EXPLICIT visual requests
 - ALWAYS include in your generateImage prompts: "There should be no text in the image whatsoever - no words, letters, signs, or any written content anywhere in the image"
+- AFTER using generateImage tags, ALWAYS provide 2-3 exciting sentences describing what you're creating for them
+- Explain what they'll see in the image and how it connects to their adventure story
+- Don't just respond with emojis - give them rich descriptive text that makes the visual come alive!
+- Be enthusiastic and immersive: "I'm bringing your mighty dragon to life, soaring through storm clouds!" not just "🐉"
+
+🚨 MANDATORY IMAGE GENERATION - NO EXCEPTIONS:
+These phrases ALWAYS require <generateImage> tags:
+  * ANY message starting with "create image:" → MUST use <generateImage>
+  * "create an image" → MUST use <generateImage>
+  * "make a picture" → MUST use <generateImage>
+  * "generate a drawing" → MUST use <generateImage>
+  * "show me" → MUST use <generateImage>
+  * "what does it look like" → MUST use <generateImage>
+  * "I want to see" → MUST use <generateImage>
+
+📋 EXPLICIT EXAMPLES - FOLLOW EXACTLY:
+  * User: "create image: create an image" → You: "🎨 <generateImage>creative scene with adventure elements</generateImage>"
+  * User: "create image: dragon" → You: "🎨 <generateImage>mighty dragon breathing fire in a mystical landscape</generateImage>"
+  * User: "show me the robot" → You: "🎨 <generateImage>futuristic robot with glowing eyes</generateImage>"
+
 - GENERATE IMAGES when the child uses these CLEAR SIGNALS:
   * Direct creation requests: "create", "make", "generate", "build", "design"
   * Direct requests: "show me", "what does it look like", "I want to see", "draw", "picture"
@@ -296,16 +330,6 @@ export class UnifiedAIStreamingService {
   * Action choices: "I choose Batman", "let's investigate", "attack the robot"
   * General adventure dialogue or narration
   * Continuing existing scenes or familiar elements
-
-- CRITICAL RULE: When in doubt, DO NOT generate an image. Only generate when 100% certain the child wants to see something specific.
-
-- Examples of CLEAR SIGNALS that warrant images:
-  * "Create an image of a dragon" → <generateImage>...</generateImage>
-  * "Make a picture of the spaceship" → <generateImage>...</generateImage>
-  * "Generate a pikachu as a mummy" → <generateImage>...</generateImage>
-  * "What does the dragon look like?" → <generateImage>...</generateImage>
-  * "Show me the spaceship" → <generateImage>...</generateImage>
-  * "I want to see the robot" → <generateImage>...</generateImage>
 
 - Examples of NO IMAGE needed:
   * "Let's fight the dragon" → NO image (action, not visual request)
@@ -325,14 +349,35 @@ Spelling Context: ${spellingQuestion.questionText}
 
 Remember: I'm your loyal companion - speak as "I" and refer to the student as "you". Make the adventure thrilling and mysterious!`;
     
-    // Build conversation context
+    // Build conversation context with recent 6 messages (60% latest user + 20% latest AI + 20% conversation history)
+    const recentMessages = chatHistory.slice(-30);
+    
+    // Get latest AI message for 20% weight
+    const latestAiMessage = chatHistory.filter(msg => msg.type === 'ai').slice(-1)[0];
+    
+    // Create weighted context components
+    const conversationHistory = recentMessages.length > 0 
+      ? `Recent conversation (20% context weight): ${recentMessages.map(msg => `${msg.type}: ${msg.content}`).join(' | ')}`
+      : '';
+    
+    const latestAiContext = latestAiMessage 
+      ? `Latest AI response (10% context weight): ${latestAiMessage.content}`
+      : '';
+    
+    // Enhanced user message with weighted context
+    let enhancedUserMessage = `Current user request (70% context weight): ${userMessage}`;
+    
+    if (latestAiContext) {
+      enhancedUserMessage = `${latestAiContext}\n\n${enhancedUserMessage}`;
+    }
+    
+    if (conversationHistory) {
+      enhancedUserMessage = `${conversationHistory}\n\n${enhancedUserMessage}`;
+    }
+    
     const messages = [
       { role: "system", content: systemPrompt },
-      ...chatHistory.map(msg => ({
-        role: msg.type === 'user' ? 'user' : 'assistant',
-        content: msg.content
-      })),
-      { role: "user", content: userMessage }
+      { role: "user", content: enhancedUserMessage }
     ];
     
     console.log('🤖 Calling OpenAI with enhanced image-aware prompt...');
@@ -423,6 +468,126 @@ Remember: I'm your loyal companion - speak as "I" and refer to the student as "y
   }
   
   /**
+   * Fallback to legacy system when unified system doesn't generate images
+   */
+  private async callLegacySystemAsFallback(
+    userMessage: string,
+    chatHistory: ChatMessage[],
+    spellingQuestion: SpellingQuestion,
+    userId: string,
+    aiResponse: string,
+    adventureId?: string
+  ): Promise<UnifiedAIResponse> {
+    try {
+      console.log('🔄 Calling legacy AI service as fallback...');
+      console.log('🎯 COORDINATION: Legacy fallback - session remains active, automatic generation blocked');
+      
+      // Import AI service dynamically to avoid circular dependencies
+      const { aiService } = await import('./ai-service');
+      
+      // 🎯 NEW: Signal that unified system (including legacy fallback) is taking over
+      aiService.unifiedSystemTakingOver();
+      
+      // Try legacy image generation if the content seems visual
+      const shouldTryLegacyImage = this.shouldTryLegacyImageGeneration(userMessage, aiResponse);
+      
+      if (shouldTryLegacyImage) {
+        console.log('🎨 Legacy system attempting image generation...');
+        
+        try {
+          // Use recent 6 messages instead of full chatHistory for legacy fallback
+          const recentMessages = chatHistory.slice(-6);
+          
+          const legacyImageResult = await aiService.generateAdventureImage(
+            userMessage,
+            recentMessages,
+            "adventure scene",
+            undefined,
+            adventureId
+          );
+          
+          if (legacyImageResult?.imageUrl) {
+            console.log('✅ [UnifiedAIStreamingService.generateUnifiedResponse()] Legacy system generated image successfully');
+            console.log('🖼️ [UnifiedAIStreamingService.generateUnifiedResponse()] Legacy image URL:', legacyImageResult.imageUrl);
+            
+            return {
+              hasImages: true,
+              textContent: aiResponse,
+              imageUrls: [legacyImageResult.imageUrl],
+              streamEvents: [
+                {
+                  type: 'text',
+                  content: aiResponse,
+                  timestamp: Date.now()
+                },
+                {
+                  type: 'image_complete',
+                  content: 'Image generated by legacy system',
+                  metadata: {
+                    imageUrl: legacyImageResult.imageUrl,
+                    prompt: legacyImageResult.usedPrompt || userMessage,
+                    provider: 'legacy-system'
+                  },
+                  timestamp: Date.now()
+                }
+              ],
+              timestamp: Date.now()
+            };
+          }
+        } catch (legacyError) {
+          console.warn('⚠️ Legacy image generation failed:', legacyError);
+          // Continue to text-only response
+        }
+      }
+      
+      // Return text-only response if no image was generated
+      console.log('📝 Fallback: Returning text-only response');
+      return {
+        hasImages: false,
+        textContent: aiResponse,
+        imageUrls: [],
+        streamEvents: [{
+          type: 'text',
+          content: aiResponse,
+          timestamp: Date.now()
+        }],
+        timestamp: Date.now()
+      };
+      
+    } catch (error) {
+      console.error('❌ Legacy fallback failed:', error);
+      return this.getFallbackUnifiedResponse(userMessage);
+    }
+  }
+
+  /**
+   * Determine if we should try legacy image generation
+   */
+  private shouldTryLegacyImageGeneration(userMessage: string, aiResponse: string): boolean {
+    const userLower = userMessage.toLowerCase();
+    const aiLower = aiResponse.toLowerCase();
+    
+    // Check for visual keywords in user message or AI response
+    const visualKeywords = [
+      'see', 'look', 'show', 'image', 'picture', 'draw', 'create', 'make',
+      'robot', 'dragon', 'space', 'adventure', 'scene', 'character',
+      'world', 'place', 'location', 'creature', 'vehicle', 'building'
+    ];
+    
+    const hasVisualKeywords = visualKeywords.some(keyword => 
+      userLower.includes(keyword) || aiLower.includes(keyword)
+    );
+    
+    console.log('🔍 Legacy image generation check:', {
+      userMessage: userMessage.substring(0, 50),
+      hasVisualKeywords,
+      foundKeywords: visualKeywords.filter(k => userLower.includes(k) || aiLower.includes(k))
+    });
+    
+    return hasVisualKeywords;
+  }
+
+  /**
    * Fallback response when AI is not available
    */
   private getFallbackUnifiedResponse(userMessage: string): UnifiedAIResponse {
@@ -443,7 +608,8 @@ Remember: I'm your loyal companion - speak as "I" and refer to the student as "y
         type: 'text',
         content: textContent,
         timestamp: Date.now()
-      }]
+      }],
+      timestamp: Date.now()
     };
   }
   

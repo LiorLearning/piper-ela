@@ -64,6 +64,55 @@ export class ResponseProcessor {
    * Process AI response that may contain image generation instructions
    * Returns async generator that yields text and image content as it becomes available
    */
+  /**
+   * Build conversation context from recent 6 messages (60% latest user + 20% latest AI + 20% conversation history)
+   */
+  private static buildConversationContext(adventureContext: ChatMessage[], userMessage?: string): string {
+    if (!adventureContext || adventureContext.length === 0) {
+      return userMessage ? `Current user request (70% context weight): ${userMessage}` : "";
+    }
+
+    // Get recent 6 messages (both AI and user)
+    const recentMessages = adventureContext.slice(-6);
+    
+    // Get latest AI message for 20% weight
+    const latestAiMessage = adventureContext.filter(msg => msg.type === 'ai').slice(-1)[0];
+    
+    // Create weighted context components
+    const conversationHistory = recentMessages.length > 0 
+      ? `Recent conversation (20% context weight): ${recentMessages.map(msg => `${msg.type}: ${msg.content.substring(0, 100)}`).join(' | ')}`
+      : '';
+    
+    const latestAiContext = latestAiMessage 
+      ? `Latest AI response (10% context weight): ${latestAiMessage.content.substring(0, 200)}`
+      : '';
+    
+    // Build weighted context in order: 60% user, 20% AI, 20% conversation
+    let context = '';
+    
+    if (userMessage) {
+      context = `Current user request (70% context weight): ${userMessage}`;
+    }
+    
+    if (latestAiContext) {
+      if (context) {
+        context += `\n\n${latestAiContext}`;
+      } else {
+        context = latestAiContext;
+      }
+    }
+    
+    if (conversationHistory) {
+      if (context) {
+        context += `\n\n${conversationHistory}`;
+      } else {
+        context = conversationHistory;
+      }
+    }
+    
+    return context;
+  }
+
   static async *processResponseWithImages(
     response: string,
     userId: string,
@@ -79,21 +128,18 @@ export class ResponseProcessor {
       if (this.shouldGenerateImageFromContent(response)) {
         console.log('🔍 No explicit image tags found, but content suggests visual scene - generating fallback image');
         
-        // Extract context from previous messages
-        const previousContext = adventureContext
-          .slice(-3)
-          .map(msg => msg.content)
-          .join(' ');
-        
         // Use original user message for fallback generation if available
-        const rawFallbackPrompt = originalUserMessage || this.generateFallbackImagePrompt(response, previousContext);
+        const rawFallbackPrompt = originalUserMessage || this.generateFallbackImagePrompt(response, '');
         
         // Apply enhanced safety prompt to fallback as well
-        const enhancedFallbackPrompt = `Remove parts that make it moderated. Reduce intensity of violence or eliminate sexual parts if any. Then proceed to create image. Create a very realistic, high-quality image: ${rawFallbackPrompt}. Style: Realistic with vivid details. It should NOT be cartoonish or kiddish. Keep all content completely family friendly with no nudity, no sexual content, and no sensual or romantic posing. Absolutely avoid sexualized bodies, ensure no sensual poses or clothing (no cleavage, lingerie, swimwear, exposed midriff, or tight/transparent outfits); characters are depicted in fully modest attire suitable for kids. No kissing, flirting, or adult themes. Strictly avoid text on the images.`;
+        const enhancedFallbackPrompt = `Remove parts that make it moderated. Reduce intensity of violence or eliminate sexual parts if any. Then proceed to create image. Create a very realistic, high-quality image: ${rawFallbackPrompt}. Style: Realistic with vivid details. It should NOT be cartoonish or kiddish. Keep all content completely family friendly with no nudity, no sexual content, and no sensual or romantic posing. Absolutely avoid sexualized bodies, ensure no sensual poses or clothing (no cleavage, lingerie, swimwear, exposed midriff, or tight/transparent outfits); characters are depicted in fully modest attire suitable for kids. No kissing, flirting, or adult themes. Strictly avoid text on the images.
+
+Current user request (70% context weight): ${rawFallbackPrompt}`;
         
-        console.log(`🎨 Using ${originalUserMessage ? 'ORIGINAL USER MESSAGE' : 'generated fallback'} with ENHANCED PROMPT for fallback image`);
+        console.log(`🎨 [ResponseProcessor.processResponseWithImages()] Using ${originalUserMessage ? 'ORIGINAL USER MESSAGE' : 'generated fallback'} with ENHANCED PROMPT for fallback image`);
         console.log(`📝 Raw fallback: ${rawFallbackPrompt}`);
         console.log(`🛡️ Enhanced fallback: ${enhancedFallbackPrompt}`);
+        console.log(`🎯 dall-e prompt primary final: ${enhancedFallbackPrompt}`);
         
         // Yield text first
         yield { 
@@ -180,7 +226,7 @@ export class ResponseProcessor {
       
       // If we already generated a successful image, skip this image prompt but continue with text
       if (hasGeneratedSuccessfulImage) {
-        console.log(`🛑 Skipping image ${index + 1} - already generated a successful image`);
+        console.log(`🛑 [ResponseProcessor.processResponseWithImages()] Skipping image ${index + 1} - already generated a successful image`);
         // Skip the image tag content but continue with the loop to process remaining text
         lastEnd = end;
         continue;
@@ -200,13 +246,20 @@ export class ResponseProcessor {
         // Use original user message for image generation instead of AI-generated description
         const rawPrompt = originalUserMessage || prompt;
         
-        // Apply enhanced safety prompt as PRIMARY attempt
-        const enhancedPrompt = `Remove parts that make it moderated. Reduce intensity of violence or eliminate sexual parts if any. Then proceed to create image. Create a very realistic, high-quality image: ${rawPrompt}. Style: Realistic with vivid details. It should NOT be cartoonish or kiddish. Keep all content completely family friendly with no nudity, no sexual content, and no sensual or romantic posing. Absolutely avoid sexualized bodies, ensure no sensual poses or clothing (no cleavage, lingerie, swimwear, exposed midriff, or tight/transparent outfits); characters are depicted in fully modest attire suitable for kids. No kissing, flirting, or adult themes. There should be no text in the image whatsoever - no words, letters, signs, or any written content anywhere in the image.`;
+        // Extract context from recent 6 messages with 80/20 weighting
+        const conversationContext = this.buildConversationContext(adventureContext, rawPrompt);
+        
+        // Apply enhanced safety prompt as PRIMARY attempt with conversation context
+        const enhancedPrompt = `Remove parts that make it moderated. Reduce intensity of violence or eliminate sexual parts if any. Then proceed to create image. Create a very realistic, high-quality image: ${rawPrompt}. Style: Realistic with vivid details. It should NOT be cartoonish or kiddish. Keep all content completely family friendly with no nudity, no sexual content, and no sensual or romantic posing. Absolutely avoid sexualized bodies, ensure no sensual poses or clothing (no cleavage, lingerie, swimwear, exposed midriff, or tight/transparent outfits); characters are depicted in fully modest attire suitable for kids. No kissing, flirting, or adult themes. There should be no text in the image whatsoever - no words, letters, signs, or any written content anywhere in the image.
+
+${conversationContext}`;
         
         const startTime = Date.now();
-        console.log(`🎯 Generating image ${index + 1}/${imagePrompts.length} using ENHANCED PROMPT as PRIMARY attempt`);
-        console.log(`📝 Raw user input: ${rawPrompt}`);
-        console.log(`🛡️ Enhanced prompt: ${enhancedPrompt}`);
+        console.log(`🎯 [ResponseProcessor.processResponseWithImages()] Generating image ${index + 1}/${imagePrompts.length} using ENHANCED PROMPT as PRIMARY attempt`);
+        console.log(`📝 [ResponseProcessor.processResponseWithImages()] Raw user input: ${rawPrompt}`);
+        console.log(`🗣️ [ResponseProcessor.processResponseWithImages()] Conversation context: ${conversationContext.substring(0, 200)}${conversationContext.length > 200 ? '...' : ''}`);
+        console.log(`🛡️ [ResponseProcessor.processResponseWithImages()] Enhanced prompt: ${enhancedPrompt}`);
+        console.log(`🎯 dall-e prompt primary final: ${enhancedPrompt}`);
         
         const result = await imageGenerator.generateWithFallback(enhancedPrompt, userId, {
           adventureContext,
@@ -217,13 +270,15 @@ export class ResponseProcessor {
         const duration = Date.now() - startTime;
         
         if (result.success && result.imageUrl) {
-          console.log(`✅ Image ${index + 1} generated successfully in ${duration}ms`);
+          console.log(`✅ [ResponseProcessor.processResponseWithImages()] Image ${index + 1} generated successfully in ${duration}ms`);
+          console.log(`🖼️ [ResponseProcessor.processResponseWithImages()] Generated image URL: ${result.imageUrl}`);
+          console.log(`🏢 [ResponseProcessor.processResponseWithImages()] Provider used: ${result.provider}`);
           hasGeneratedSuccessfulImage = true; // Mark as successful, stop generating more
           
-          // Stop loading sound and play completion sound
-          console.log('🎵 Stopping loading sound and playing completion sound...');
+          // Stop loading sound - completion sound now handled by unified streaming hook
+          console.log('🎵 Stopping loading sound...');
           stopImageLoadingSound();
-          playImageCompleteSound();
+          // playImageCompleteSound(); // Removed - now handled by unified streaming hook timeout
           
           // Stream the completed image
           yield { 
@@ -373,7 +428,7 @@ export class ResponseProcessor {
    * Generate a fallback image prompt from response content
    * Used when AI doesn't provide explicit <generateImage> tags
    */
-  static generateFallbackImagePrompt(response: string, previousContext: string = ''): string {
+  static generateFallbackImagePrompt(response: string, _previousContext: string = ''): string {
     const lowerResponse = response.toLowerCase();
     
     // Try to extract key visual elements
@@ -398,14 +453,6 @@ export class ResponseProcessor {
     
     if (lowerResponse.includes('time') && lowerResponse.includes('vortex')) {
       prompt += 'swirling time vortex with glowing energy and mystical effects, ';
-    }
-    
-    // Add context from previous conversation if available
-    if (previousContext) {
-      const contextLower = previousContext.toLowerCase();
-      if (contextLower.includes('space') || contextLower.includes('adventure')) {
-        prompt += 'science fiction adventure scene, ';
-      }
     }
     
     // Default fallback

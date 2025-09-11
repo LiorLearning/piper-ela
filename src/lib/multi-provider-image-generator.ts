@@ -47,7 +47,11 @@ export class MultiProviderImageGenerator {
     let lastError: Error | null = null;
     const startTime = Date.now();
     
-    console.log(`🎨 Starting multi-provider image generation for prompt: "${prompt.substring(0, 100)}..."`);
+    console.log(`🚀 [MultiProviderImageGenerator.generateWithFallback()] Starting image generation`);
+    console.log(`📝 [MultiProviderImageGenerator.generateWithFallback()] Full prompt: "${prompt}"`);
+    console.log(`👤 [MultiProviderImageGenerator.generateWithFallback()] User ID: ${userId}`);
+    console.log(`⚙️ [MultiProviderImageGenerator.generateWithFallback()] Options:`, options);
+    console.log(`🔄 [MultiProviderImageGenerator.generateWithFallback()] Available providers: ${this.providers.map(p => p.name).join(', ')}`);
     
     // Try each provider in order
     for (let attempt = 0; attempt < this.providers.length; attempt++) {
@@ -56,21 +60,23 @@ export class MultiProviderImageGenerator {
       
       // Skip providers that aren't configured
       if (!provider.isConfigured()) {
-        console.log(`⚠️ ${provider.name} not configured, skipping...`);
+        console.log(`⚠️ [MultiProviderImageGenerator.generateWithFallback()] ${provider.name} not configured, skipping...`);
         continue;
       }
       
       try {
-        console.log(`🔄 Attempting image generation with ${provider.name}... (attempt ${attempt + 1}/${this.providers.length})`);
+        console.log(`🔄 [MultiProviderImageGenerator.generateWithFallback()] Attempting image generation with ${provider.name}... (attempt ${attempt + 1}/${this.providers.length})`);
         
         // Refine prompt for this specific provider
         const refinedPrompt = await this.refinePromptForProvider(prompt, provider.name, options);
+        console.log(`🎯 [MultiProviderImageGenerator.generateWithFallback()] Refined prompt for ${provider.name}: "${refinedPrompt}"`);
         
         // Generate image with current provider
         const imageUrl = await provider.generate(refinedPrompt, userId, options);
         const providerDuration = Date.now() - providerStartTime;
         
-        console.log(`✅ ${provider.name} generated image successfully in ${providerDuration}ms`);
+        console.log(`✅ [MultiProviderImageGenerator.generateWithFallback()] ${provider.name} generated image successfully in ${providerDuration}ms`);
+        console.log(`🖼️ [MultiProviderImageGenerator.generateWithFallback()] Generated image URL: ${imageUrl}`);
         
         // Upload to Firebase for persistence (non-blocking)
         let persistentUrl = imageUrl;
@@ -89,10 +95,11 @@ export class MultiProviderImageGenerator {
           
           if (uploadResult?.imageUrl) {
             persistentUrl = uploadResult.imageUrl;
-            console.log(`☁️ Image uploaded to Firebase successfully`);
+            console.log(`☁️ [MultiProviderImageGenerator.generateWithFallback()] Image uploaded to Firebase successfully`);
+            console.log(`🔗 [MultiProviderImageGenerator.generateWithFallback()] Firebase URL: ${persistentUrl}`);
           }
         } catch (uploadError) {
-          console.warn('⚠️ Firebase upload failed, using original URL:', uploadError);
+          console.warn('⚠️ [MultiProviderImageGenerator.generateWithFallback()] Firebase upload failed, using original URL:', uploadError);
           // Continue with original URL - don't fail the entire generation
         }
         
@@ -207,13 +214,28 @@ export class MultiProviderImageGenerator {
   }
   
   /**
+   * Get recent AI messages for context
+   */
+  private getRecentAIMessages(context: ChatMessage[]): string {
+    return context
+      .filter(msg => msg.type === 'ai')
+      .slice(-6)
+      .map(msg => msg.content.substring(0, 150))
+      .join(' | ');
+  }
+
+  /**
    * Build context string for Firebase storage
    */
   private buildAdventureContextString(context: ChatMessage[]): string {
-    return context
-      .slice(-5) // Last 5 messages
+    const userMessages = context
+      .slice(-30) // Last 30 messages
       .map(msg => msg.content.substring(0, 100)) // Truncate for storage
       .join(' | ');
+    
+    const aiMessages = this.getRecentAIMessages(context);
+    
+    return aiMessages ? `${userMessages} | AI Context: ${aiMessages}` : userMessages;
   }
 }
 
@@ -250,7 +272,11 @@ class OpenAIProvider implements ImageProvider {
       throw new Error('OpenAI client not configured');
     }
     
-    console.log(`🎯 OpenAI DALL-E 3 generating with prompt: "${prompt.substring(0, 100)}..."`);
+    console.log(`🎯 [OpenAIProvider.generate()] Starting DALL-E 3 image generation`);
+    console.log(`📝 [OpenAIProvider.generate()] Full prompt: "${prompt}"`);
+    console.log(`👤 [OpenAIProvider.generate()] User ID: ${userId}`);
+    console.log(`⚙️ [OpenAIProvider.generate()] Options:`, options);
+    console.log(`🎯 dall-e prompt multi-provider: ${prompt}`);
     
     const response = await this.client.images.generate({
       model: "dall-e-3",
@@ -263,8 +289,12 @@ class OpenAIProvider implements ImageProvider {
     
     const imageUrl = response.data[0]?.url;
     if (!imageUrl) {
+      console.error(`❌ [OpenAIProvider.generate()] No image URL returned from OpenAI DALL-E 3`);
       throw new Error('No image URL returned from OpenAI DALL-E 3');
     }
+    
+    console.log(`✅ [OpenAIProvider.generate()] Successfully generated image with DALL-E 3`);
+    console.log(`🖼️ [OpenAIProvider.generate()] Image URL: ${imageUrl}`);
     
     return imageUrl;
   }
@@ -302,7 +332,11 @@ class AzureOpenAIProvider implements ImageProvider {
       throw new Error('Azure OpenAI client not configured');
     }
     
-    console.log(`🎯 Azure OpenAI DALL-E 3 generating with prompt: "${prompt.substring(0, 100)}..."`);
+    console.log(`🎯 [AzureOpenAIProvider.generate()] Starting Azure DALL-E 3 image generation`);
+    console.log(`📝 [AzureOpenAIProvider.generate()] Full prompt: "${prompt}"`);
+    console.log(`👤 [AzureOpenAIProvider.generate()] User ID: ${userId}`);
+    console.log(`⚙️ [AzureOpenAIProvider.generate()] Options:`, options);
+    console.log(`🎯 dall-e prompt azure: ${prompt}`);
     
     const response = await this.client.images.generate({
       model: "dall-e-3",
@@ -315,8 +349,12 @@ class AzureOpenAIProvider implements ImageProvider {
     
     const imageUrl = response.data[0]?.url;
     if (!imageUrl) {
+      console.error(`❌ [AzureOpenAIProvider.generate()] No image URL returned from Azure OpenAI DALL-E 3`);
       throw new Error('No image URL returned from Azure OpenAI DALL-E 3');
     }
+    
+    console.log(`✅ [AzureOpenAIProvider.generate()] Successfully generated image with Azure DALL-E 3`);
+    console.log(`🖼️ [AzureOpenAIProvider.generate()] Image URL: ${imageUrl}`);
     
     return imageUrl;
   }
@@ -343,7 +381,10 @@ class StableDiffusionProvider implements ImageProvider {
       throw new Error('Stability API key not configured');
     }
     
-    console.log(`🎯 Stable Diffusion generating with prompt: "${prompt.substring(0, 100)}..."`);
+    console.log(`🎯 [StableDiffusionProvider.generate()] Starting Stable Diffusion image generation`);
+    console.log(`📝 [StableDiffusionProvider.generate()] Full prompt: "${prompt}"`);
+    console.log(`👤 [StableDiffusionProvider.generate()] User ID: ${userId}`);
+    console.log(`⚙️ [StableDiffusionProvider.generate()] Options:`, options);
     
     const response = await fetch(this.apiUrl, {
       method: 'POST',
@@ -369,13 +410,20 @@ class StableDiffusionProvider implements ImageProvider {
     const result = await response.json();
     
     if (!result.artifacts?.[0]?.base64) {
+      console.error(`❌ [StableDiffusionProvider.generate()] No image returned from Stability API`);
       throw new Error('No image returned from Stability API');
     }
+    
+    console.log(`✅ [StableDiffusionProvider.generate()] Successfully generated image with Stable Diffusion`);
     
     // Convert base64 to blob URL
     const base64Data = result.artifacts[0].base64;
     const blob = this.base64ToBlob(base64Data, 'image/png');
-    return URL.createObjectURL(blob);
+    const blobUrl = URL.createObjectURL(blob);
+    
+    console.log(`🖼️ [StableDiffusionProvider.generate()] Generated blob URL: ${blobUrl}`);
+    
+    return blobUrl;
   }
   
   private base64ToBlob(base64: string, mimeType: string): Blob {
